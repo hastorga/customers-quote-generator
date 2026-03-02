@@ -1,0 +1,22 @@
+[project]
+name = "customers-quote-generator"
+version = "0.1.0"
+description = "Generate customer quote PDFs with ReportLab"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "reportlab>=4.4.4",
+]
+
+[project.scripts]
+quote-generator = "quote_generator.app:run"
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quote_generator"]
