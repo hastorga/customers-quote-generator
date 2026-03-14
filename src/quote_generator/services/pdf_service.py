@@ -1,26 +1,21 @@
 from __future__ import annotations
 
-from reportlab.lib import colors
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.units import cm, mm
 from reportlab.pdfgen import canvas
+from reportlab.lib import colors
 
-from quote_generator.formatting import format_clp_decimal, format_clp_int
-from quote_generator.models import QuoteDocument
-from quote_generator.pricing import PricingSummary
+from quote_generator.utils.formatting import format_clp_decimal, format_clp_int
+from quote_generator.core.models import QuoteDocument
+from quote_generator.utils.pricing import PricingSummary
+from quote_generator.core.constants import (
+    ORANGE, ABAS_BLUE, DARK_GRAY, LIGHT_GRAY, MID_GRAY, TEXT_GRAY, WHITE,
+    UI_STRINGS
+)
 
 PAGE_WIDTH, PAGE_HEIGHT = LETTER
 MARGIN_LEFT = 2 * cm
 MARGIN_RIGHT = 2 * cm
-
-ORANGE = colors.HexColor("#F47920")
-ABAS_BLUE = colors.HexColor("#1A3B8A")
-DARK_GRAY = colors.HexColor("#3D3D3D")
-LIGHT_GRAY = colors.HexColor("#F5F5F5")
-MID_GRAY = colors.HexColor("#D0D0D0")
-TEXT_GRAY = colors.HexColor("#555555")
-WHITE = colors.white
-
 
 def render_quote_pdf(document: QuoteDocument, pricing: PricingSummary) -> None:
     pdf = canvas.Canvas(document.output_path, pagesize=LETTER)
@@ -53,7 +48,7 @@ def _draw_header(pdf: canvas.Canvas, document: QuoteDocument) -> dict[str, float
 
     pdf.setFont("Helvetica-Bold", 22)
     pdf.setFillColor(DARK_GRAY)
-    pdf.drawRightString(PAGE_WIDTH - MARGIN_RIGHT, header_bottom + 18 * mm, f"QUOTE # {document.quote_number}")
+    pdf.drawRightString(PAGE_WIDTH - MARGIN_RIGHT, header_bottom + 18 * mm, f"{UI_STRINGS['quote_title']} {document.quote_number}")
 
     pdf.setStrokeColor(ORANGE)
     pdf.setLineWidth(2.5)
@@ -80,7 +75,7 @@ def _draw_issuer_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y:
     pdf.drawString(MARGIN_LEFT, top_y, issuer.company_name)
 
     lines = [
-        f"Tax ID: {issuer.tax_id}",
+        f"{UI_STRINGS['tax_id']} {issuer.tax_id}",
         issuer.office_name,
         issuer.address,
         issuer.phone,
@@ -98,11 +93,11 @@ def _draw_issuer_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y:
 
 def _draw_client_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y: float) -> float:
     rows = [
-        ("TO:", document.client.contact_name),
-        ("COMPANY:", document.client.company_name),
-        ("TAX ID:", document.client.tax_id),
-        ("ADDRESS:", document.client.address),
-        ("CITY:", document.client.city),
+        (UI_STRINGS['to'], document.client.contact_name),
+        (UI_STRINGS['company'], document.client.company_name),
+        (UI_STRINGS['tax_id'], document.client.tax_id),
+        (UI_STRINGS['address'], document.client.address),
+        (UI_STRINGS['city'], document.client.city),
     ]
 
     row_height = 5.8 * mm
@@ -127,7 +122,7 @@ def _draw_client_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y:
     date_y = box_y + box_height - padding - date_height / 2 - 1
     pdf.setFont("Helvetica-Bold", 7.5)
     pdf.setFillColor(TEXT_GRAY)
-    pdf.drawString(inner_x, date_y, "Date:")
+    pdf.drawString(inner_x, date_y, UI_STRINGS['date'])
 
     pdf.setFont("Helvetica", 7.5)
     pdf.setFillColor(DARK_GRAY)
@@ -160,7 +155,14 @@ def _draw_product_table(
     table_width = sum(column_widths)
     row_height = 9 * mm
 
-    headers = ["Item", "Qty", "Description", "Unit Price", "Discount (%)", "Line Total"]
+    headers = [
+        UI_STRINGS['table_item'],
+        UI_STRINGS['table_qty'],
+        UI_STRINGS['table_desc'],
+        UI_STRINGS['table_unit_price'],
+        UI_STRINGS['table_discount'],
+        UI_STRINGS['table_total']
+    ]
     alignments = ["L", "C", "L", "R", "C", "R"]
 
     pdf.setFillColor(ABAS_BLUE)
@@ -225,9 +227,9 @@ def _draw_totals(pdf: canvas.Canvas, pricing: PricingSummary, table_context: dic
     top_y = data_y - 2 * mm
 
     rows = [
-        ("Subtotal", format_clp_int(pricing.subtotal), False),
-        ("Tax 19%", format_clp_int(pricing.tax), False),
-        ("TOTAL", format_clp_int(pricing.total), True),
+        (UI_STRINGS['subtotal'], format_clp_int(pricing.subtotal), False),
+        (UI_STRINGS['tax'], format_clp_int(pricing.tax), False),
+        (UI_STRINGS['total'], format_clp_int(pricing.total), True),
     ]
 
     for idx, (label, value, highlight) in enumerate(rows):
@@ -261,7 +263,7 @@ def _draw_validity_note(pdf: canvas.Canvas, validity_days: int, totals_bottom: f
     pdf.drawString(
         MARGIN_LEFT,
         totals_bottom - 8 * mm,
-        f"This quote is valid for up to {validity_days} calendar days from the issue date.",
+        UI_STRINGS['validity_note'].format(days=validity_days),
     )
 
 
@@ -274,7 +276,7 @@ def _draw_footer(pdf: canvas.Canvas) -> None:
 
     pdf.setFont("Helvetica-Bold", 8.5)
     pdf.setFillColor(WHITE)
-    pdf.drawCentredString(PAGE_WIDTH / 2, footer_height - 6 * mm, "Thank you for your request.")
+    pdf.drawCentredString(PAGE_WIDTH / 2, footer_height - 6 * mm, UI_STRINGS['footer_msg'])
 
 
 def _draw_aligned_text(
