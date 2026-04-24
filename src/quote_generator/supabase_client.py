@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from datetime import date
+from typing import Any, cast
 
 from supabase import Client, create_client
 
@@ -40,13 +41,13 @@ def fetch_customer(customer_id: str) -> CustomerData:
         .single()
         .execute()
     )
-    d = row.data
-    return CustomerData(name=d["name"], rut=d["rut"], address=d["address"], city=d["city"])
+    d = cast(dict[str, Any], row.data)
+    return CustomerData(name=str(d["name"]), rut=str(d["rut"]), address=str(d["address"]), city=str(d["city"]))
 
 
 def resolve_items(
     customer_id: str,
-    items: list[dict],
+    items: list[dict[str, Any]],
     reference_date: date,
 ) -> list[ResolvedItem]:
     """Resolve list prices and customer discounts for each requested item."""
@@ -55,9 +56,9 @@ def resolve_items(
     resolved = []
 
     for item in items:
-        list_price_id = item["list_price_id"]
-        quantity = item["quantity"]
-        description = item["description"]
+        list_price_id = str(item["list_price_id"])
+        quantity = int(item["quantity"])
+        description = str(item["description"])
 
         lp_row = (
             client.table("list_prices")
@@ -68,9 +69,9 @@ def resolve_items(
             .single()
             .execute()
         )
-        lp = lp_row.data
-        format_code = lp["format_code"]
-        unit_price = lp["price"]
+        lp = cast(dict[str, Any], lp_row.data)
+        format_code = str(lp["format_code"])
+        unit_price = int(lp["price"])
 
         disc_rows = (
             client.table("customer_discounts")
@@ -81,7 +82,8 @@ def resolve_items(
             .or_(f"valid_until.is.null,valid_until.gte.{ref}")
             .execute()
         )
-        discount_pct = float(disc_rows.data[0]["discount"]) if disc_rows.data else 0.0
+        disc_data = cast(list[dict[str, Any]], disc_rows.data)
+        discount_pct = float(disc_data[0]["discount"]) if disc_data else 0.0
 
         resolved.append(ResolvedItem(
             list_price_id=list_price_id,
@@ -118,9 +120,10 @@ def save_quotation(
         })
         .execute()
     )
-    quotation_id = q_row.data[0]["id"]
+    q_data = cast(list[dict[str, Any]], q_row.data)
+    quotation_id = str(q_data[0]["id"])
 
-    qi_rows = [
+    qi_rows: list[Any] = [
         {
             "quotation_id": quotation_id,
             "list_price_id": item.list_price_id,
