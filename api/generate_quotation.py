@@ -59,7 +59,7 @@ class handler(BaseHTTPRequestHandler):
             resolved = resolve_items(customer_id, items, today)
 
             rpc_result = _get_client().rpc("nextval_for_quote", {}).execute()
-            quote_number = int(rpc_result.data)
+            quote_number = int(rpc_result.data)  # type: ignore
 
             # PDF renderer supports one item per document; use the first
             first = resolved[0]

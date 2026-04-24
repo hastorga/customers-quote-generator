@@ -32,7 +32,7 @@ def run() -> None:
     )
 
     rpc_result = _get_client().rpc("nextval_for_quote", {}).execute()
-    quote_number = int(rpc_result.data)
+    quote_number = int(rpc_result.data)  # type: ignore
 
     first = resolved[0]
     client_info = ClientInfo(
