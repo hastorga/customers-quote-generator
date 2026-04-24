@@ -6,8 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 uv sync                  # Install/sync dependencies
-uv run python main.py    # Run the application
-uv run quote-generator   # Run via script entrypoint
+uv run quote-generator \
+  --customer-id <uuid> \
+  --contact-name "Nombre" \
+  --list-price-id <uuid> \
+  --quantity 10 \
+  --description "Despacho a Tiltil" \
+  [--notes "texto opcional"]   # Generate PDF via CLI (requires SUPABASE_URL + SUPABASE_SERVICE_KEY)
 pytest                   # Run all tests
 pytest tests/test_pricing.py  # Run a single test file
 ```
