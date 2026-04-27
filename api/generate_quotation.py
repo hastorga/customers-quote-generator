@@ -8,7 +8,6 @@ from datetime import date
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-# Make the src package importable in Vercel's serverless runtime
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from quote_generator.core.constants import DEFAULT_ISSUER, VALIDITY_DAYS
@@ -20,15 +19,32 @@ from quote_generator.supabase_client import (
     resolve_items,
     save_quotation,
 )
-from quote_generator.utils.pricing import calculate_pricing
+from quote_generator.utils.pricing import PricingSummary, calculate_pricing
 
 LOGO_PATH = str(Path(__file__).parent.parent / "assets" / "abastible-logo.png")
 
 _CORS = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": "https://abastible-sales.vercel.app",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
 }
+
+
+def _validate_items(items: list[dict]) -> str | None:
+    if not items:
+        return "items debe ser una lista no vacía"
+    for i, it in enumerate(items):
+        if "list_price_id" not in it:
+            return f"items[{i}]: falta list_price_id"
+        try:
+            qty = int(it.get("quantity", 0))
+        except (TypeError, ValueError):
+            return f"items[{i}]: quantity debe ser un entero"
+        if qty <= 0:
+            return f"items[{i}]: quantity debe ser > 0"
+        if not str(it.get("description", "")).strip():
+            return f"items[{i}]: description no puede estar vacía"
+    return None
 
 
 class handler(BaseHTTPRequestHandler):
@@ -46,9 +62,13 @@ class handler(BaseHTTPRequestHandler):
             contact_name: str = body["contact_name"]
             notes: str | None = body.get("notes")
             items: list[dict] = body["items"]
-            if not items:
-                raise ValueError("items must be a non-empty list")
-        except (KeyError, ValueError, json.JSONDecodeError) as e:
+            error = _validate_items(items)
+            if error:
+                raise ValueError(error)
+        except (KeyError, json.JSONDecodeError) as e:
+            self._error(400, str(e))
+            return
+        except ValueError as e:
             self._error(400, str(e))
             return
 
@@ -61,26 +81,36 @@ class handler(BaseHTTPRequestHandler):
             rpc_result = _get_client().rpc("nextval_for_quote", {}).execute()
             quote_number = int(rpc_result.data)  # type: ignore
 
-            # PDF renderer supports one item per document; use the first
-            first = resolved[0]
+            quote_items: list[QuoteItem] = []
+            total_subtotal = 0
+            for r in resolved:
+                qi = QuoteItem(
+                    name=r.format_code,
+                    quantity=r.quantity,
+                    description=r.description,
+                    unit_price_with_tax=r.unit_price_with_tax,
+                    discount_percent=r.discount_pct,
+                )
+                total_subtotal += calculate_pricing(
+                    qi.quantity, qi.unit_price_with_tax, qi.discount_percent
+                ).subtotal
+                quote_items.append(qi)
+
+            total_tax = round(total_subtotal * 0.19)
+            totals = PricingSummary(
+                unit_price_net=0.0,
+                unit_price_discounted=0.0,
+                subtotal=total_subtotal,
+                tax=total_tax,
+                total=total_subtotal + total_tax,
+            )
+
             client_info = ClientInfo(
                 contact_name=contact_name,
                 company_name=customer.name,
                 tax_id=customer.rut,
                 address=customer.address,
                 city=customer.city,
-            )
-            quote_item = QuoteItem(
-                name=first.format_code,
-                quantity=first.quantity,
-                description=first.description,
-                unit_price_with_tax=first.unit_price_with_tax,
-                discount_percent=first.discount_pct,
-            )
-            pricing = calculate_pricing(
-                quantity=quote_item.quantity,
-                unit_price_with_tax=quote_item.unit_price_with_tax,
-                discount_percent=quote_item.discount_percent,
             )
 
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -91,12 +121,12 @@ class handler(BaseHTTPRequestHandler):
                 issue_date=today,
                 issuer=DEFAULT_ISSUER,
                 client=client_info,
-                item=quote_item,
+                items=quote_items,
                 logo_path=LOGO_PATH,
                 output_path=tmp_path,
                 validity_days=VALIDITY_DAYS,
             )
-            render_quote_pdf(document, pricing)
+            render_quote_pdf(document, totals)
             with open(tmp_path, "rb") as f:
                 pdf_bytes = f.read()
             os.unlink(tmp_path)

@@ -5,9 +5,9 @@ from reportlab.lib.units import cm, mm
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 
-from quote_generator.utils.formatting import format_clp_decimal, format_clp_int
+from quote_generator.utils.formatting import format_clp_int
 from quote_generator.core.models import QuoteDocument
-from quote_generator.utils.pricing import PricingSummary
+from quote_generator.utils.pricing import PricingSummary, calculate_pricing
 from quote_generator.core.constants import (
     ORANGE, ABAS_BLUE, DARK_GRAY, LIGHT_GRAY, MID_GRAY, TEXT_GRAY, WHITE,
     UI_STRINGS
@@ -17,12 +17,12 @@ PAGE_WIDTH, PAGE_HEIGHT = LETTER
 MARGIN_LEFT = 2 * cm
 MARGIN_RIGHT = 2 * cm
 
-def render_quote_pdf(document: QuoteDocument, pricing: PricingSummary) -> None:
+def render_quote_pdf(document: QuoteDocument, totals: PricingSummary) -> None:
     pdf = canvas.Canvas(document.output_path, pagesize=LETTER)
 
     context = _draw_header(pdf, document)
-    table_context = _draw_product_table(pdf, document, pricing, context["content_top"])
-    totals_bottom = _draw_totals(pdf, pricing, table_context)
+    table_context = _draw_items_table(pdf, document, context["content_top"])
+    totals_bottom = _draw_totals(pdf, totals, table_context)
     _draw_validity_note(pdf, document.validity_days, totals_bottom)
     _draw_footer(pdf)
 
@@ -144,16 +144,16 @@ def _draw_client_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y:
     return box_y
 
 
-def _draw_product_table(
+def _draw_items_table(
     pdf: canvas.Canvas,
     document: QuoteDocument,
-    pricing: PricingSummary,
     table_top: float,
-) -> dict[str, float]:
+) -> dict:
     column_widths = [135, 38, 120, 82, 65, 58]
     table_x = MARGIN_LEFT
     table_width = sum(column_widths)
     row_height = 9 * mm
+    alignments = ["C", "C", "L", "R", "C", "R"]
 
     headers = [
         UI_STRINGS['table_item'],
@@ -161,13 +161,11 @@ def _draw_product_table(
         UI_STRINGS['table_desc'],
         UI_STRINGS['table_unit_price'],
         UI_STRINGS['table_discount'],
-        UI_STRINGS['table_total']
+        UI_STRINGS['table_total'],
     ]
-    alignments = ["L", "C", "L", "R", "C", "R"]
 
     pdf.setFillColor(ABAS_BLUE)
     pdf.rect(table_x, table_top - row_height, table_width, row_height, fill=1, stroke=0)
-
     pdf.setFont("Helvetica-Bold", 7.5)
     pdf.setFillColor(WHITE)
     current_x = table_x
@@ -175,45 +173,53 @@ def _draw_product_table(
         _draw_aligned_text(pdf, label, alignment, current_x, table_top - row_height + 3 * mm, width)
         current_x += width
 
-    data_y = table_top - 2 * row_height
-    pdf.setFillColor(WHITE)
-    pdf.rect(table_x, data_y, table_width, row_height, fill=1, stroke=0)
-    pdf.setStrokeColor(MID_GRAY)
-    pdf.setLineWidth(0.5)
-    pdf.rect(table_x, data_y, table_width, row_height, fill=0, stroke=1)
+    header_bottom = table_top - row_height
+    last_row_y = header_bottom
 
-    row_values = [
-        document.item.name,
-        str(document.item.quantity),
-        document.item.description,
-        format_clp_decimal(pricing.unit_price_net),
-        f"{document.item.discount_percent}%",
-        format_clp_decimal(pricing.unit_price_discounted),
-    ]
+    for idx, item in enumerate(document.items):
+        row_y = header_bottom - (idx + 1) * row_height
+        last_row_y = row_y
 
-    pdf.setFont("Helvetica", 8)
-    pdf.setFillColor(DARK_GRAY)
-    current_x = table_x
-    for value, alignment, width in zip(row_values, alignments, column_widths):
-        _draw_aligned_text(pdf, value, alignment, current_x, data_y + 3 * mm, width)
-        current_x += width
+        bg_color = LIGHT_GRAY if idx % 2 == 0 else WHITE
+        pdf.setFillColor(bg_color)
+        pdf.rect(table_x, row_y, table_width, row_height, fill=1, stroke=0)
+        pdf.setStrokeColor(MID_GRAY)
+        pdf.setLineWidth(0.5)
+        pdf.rect(table_x, row_y, table_width, row_height, fill=0, stroke=1)
+
+        pricing = calculate_pricing(item.quantity, item.unit_price_with_tax, item.discount_percent)
+        row_values = [
+            str(idx + 1),
+            str(item.quantity),
+            item.description,
+            format_clp_int(round(item.unit_price_with_tax / 1.19)),
+            f"{item.discount_percent:g}%",
+            format_clp_int(pricing.subtotal),
+        ]
+
+        pdf.setFont("Helvetica", 8)
+        pdf.setFillColor(DARK_GRAY)
+        current_x = table_x
+        for value, alignment, width in zip(row_values, alignments, column_widths):
+            _draw_aligned_text(pdf, value, alignment, current_x, row_y + 3 * mm, width)
+            current_x += width
 
     pdf.setStrokeColor(colors.HexColor("#BBBBBB"))
     pdf.setLineWidth(0.3)
     separator_x = table_x
     for width in column_widths[:-1]:
         separator_x += width
-        pdf.line(separator_x, table_top, separator_x, data_y)
+        pdf.line(separator_x, table_top, separator_x, last_row_y)
 
     return {
         "table_x": table_x,
         "table_width": table_width,
-        "data_y": data_y,
+        "data_y": last_row_y,
         "column_widths": column_widths,
     }
 
 
-def _draw_totals(pdf: canvas.Canvas, pricing: PricingSummary, table_context: dict[str, float]) -> float:
+def _draw_totals(pdf: canvas.Canvas, pricing: PricingSummary, table_context: dict) -> float:
     table_x = table_context["table_x"]
     table_width = table_context["table_width"]
     data_y = table_context["data_y"]

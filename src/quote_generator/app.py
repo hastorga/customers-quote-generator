@@ -63,7 +63,7 @@ def run() -> None:
         issue_date=today,
         issuer=DEFAULT_ISSUER,
         client=client_info,
-        item=quote_item,
+        items=[quote_item],
         logo_path="assets/abastible-logo.png",
         output_path=output_path,
         validity_days=VALIDITY_DAYS,
