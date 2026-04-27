@@ -38,7 +38,7 @@ class QuoteDocument:
     issue_date: date
     issuer: IssuerInfo
     client: ClientInfo
-    item: QuoteItem
+    items: list[QuoteItem]
     logo_path: str
     output_path: str
     validity_days: int = 10
