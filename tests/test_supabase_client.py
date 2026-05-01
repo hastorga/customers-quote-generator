@@ -189,8 +189,8 @@ class TestSaveQuotation:
         mock_client.table.side_effect = [q_chain, qi_chain]
 
         items = [
-            ResolvedItem("lp-1", "A", "Desc A", 1, 1000, 0.0),
-            ResolvedItem("lp-2", "B", "Desc B", 2, 2000, 5.0),
+            ResolvedItem(list_price_id="lp-1", format_code="A", quantity=1, unit_price_with_tax=1000, discount_pct=0.0, description="Desc A"),
+            ResolvedItem(list_price_id="lp-2", format_code="B", quantity=2, unit_price_with_tax=2000, discount_pct=5.0, description="Desc B"),
         ]
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
@@ -209,7 +209,7 @@ class TestSaveQuotation:
         mock_client.table.side_effect = [q_chain, qi_chain]
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            save_quotation(1, "c", "X", [ResolvedItem("lp-1", "A", "D", 1, 100, 0.0)], notes=None)
+            save_quotation(1, "c", "X", [ResolvedItem(list_price_id="lp-1", format_code="A", quantity=1, unit_price_with_tax=100, discount_pct=0.0)], notes=None)
 
         inserted = q_chain.insert.call_args[0][0]
         assert inserted["notes"] == ""

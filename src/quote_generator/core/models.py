@@ -25,7 +25,7 @@ class ClientInfo:
 class QuoteItem:
     name: str
     quantity: int
-    description: str
+    description: str = ""
     unit_price_with_tax: int
     discount_percent: float
 

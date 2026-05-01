@@ -86,8 +86,6 @@ def _validate_items(items: list[dict]) -> str | None:
             return f"items[{i}]: quantity debe ser un entero"
         if qty <= 0:
             return f"items[{i}]: quantity debe ser > 0"
-        if not str(it.get("description", "")).strip():
-            return f"items[{i}]: description no puede estar vacía"
     return None
 
 
@@ -168,7 +166,8 @@ def generate_quotation():
 
         save_quotation(quote_number, customer_id, contact_name, resolved, notes)
 
-        filename = f"cotizacion_{str(quote_number).zfill(3)}.pdf"
+        customer_slug = customer.name.lower().replace(" ", "-")
+        filename = f"quotation-{quote_number}-{customer_slug}.pdf"
         response = Response(
             pdf_bytes,
             mimetype="application/pdf",

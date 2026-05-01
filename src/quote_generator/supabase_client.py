@@ -24,10 +24,10 @@ class CustomerData:
 class ResolvedItem:
     list_price_id: str
     format_code: str
-    description: str
     quantity: int
     unit_price_with_tax: int  # list_prices.price — already includes 19% VAT
     discount_pct: float       # customer_discounts.discount, defaults to 0.0
+    description: str = ""
 
 
 def fetch_customer(customer_id: str) -> CustomerData:
@@ -56,7 +56,7 @@ def resolve_items(
     for item in items:
         list_price_id = str(item["list_price_id"])
         quantity = int(item["quantity"])
-        description = str(item["description"])
+        description = str(item.get("description") or "")
 
         lp_row = (
             client.table("list_prices")
