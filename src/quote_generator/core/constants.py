@@ -25,6 +25,14 @@ DEFAULT_ISSUER = IssuerInfo(
 VALIDITY_DAYS = 10
 TAX_RATE = 0.19
 
+ITEM_NAMES: dict[str, str] = {
+    "GAS05N": "Recarga 5 kilos",
+    "GAS11N": "Recarga 11 kilos",
+    "GAS15N": "Recarga 15 kilos",
+    "GAS45N": "Recarga 45 kilos",
+    "GAS15VMA": "Recarga VM Aluminio",
+}
+
 # UI / Spanish Translations for PDF
 UI_STRINGS = {
     "quote_title": "COTIZACIÓN #",

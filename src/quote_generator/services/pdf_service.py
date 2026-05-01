@@ -10,7 +10,7 @@ from quote_generator.core.models import QuoteDocument
 from quote_generator.utils.pricing import PricingSummary, calculate_pricing
 from quote_generator.core.constants import (
     ORANGE, ABAS_BLUE, DARK_GRAY, LIGHT_GRAY, MID_GRAY, TEXT_GRAY, WHITE,
-    UI_STRINGS
+    UI_STRINGS, ITEM_NAMES,
 )
 
 PAGE_WIDTH, PAGE_HEIGHT = LETTER
@@ -202,7 +202,7 @@ def _draw_items_table(
         discount_display = f"{item.discount_percent * 100:g}%"
         if has_description:
             row_values = [
-                item.name,
+                ITEM_NAMES.get(item.name, item.name),
                 str(item.quantity),
                 item.description,
                 format_clp_int(round(item.unit_price_with_tax / 1.19)),
@@ -211,7 +211,7 @@ def _draw_items_table(
             ]
         else:
             row_values = [
-                item.name,
+                ITEM_NAMES.get(item.name, item.name),
                 str(item.quantity),
                 format_clp_int(round(item.unit_price_with_tax / 1.19)),
                 discount_display,
