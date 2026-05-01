@@ -16,9 +16,9 @@ class IssuerInfo:
 
 @dataclass(frozen=True)
 class ClientInfo:
-    contact_name: str
     company_name: str
     tax_id: str
+    contact_name: str = ""
 
 
 @dataclass(frozen=True)

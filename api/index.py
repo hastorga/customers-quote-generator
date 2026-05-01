@@ -99,7 +99,7 @@ def generate_quotation():
     try:
         body = request.get_json(force=True)
         customer_id: str = body["customer_id"]
-        contact_name: str = body["contact_name"]
+        contact_name: str = body.get("contact_name") or ""
         notes: str | None = body.get("notes")
         items: list[dict] = body["items"]
         error = _validate_items(items)
