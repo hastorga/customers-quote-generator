@@ -28,7 +28,7 @@ from quote_generator.utils.pricing import PricingSummary, calculate_pricing
 LOGO_PATH = str(Path(__file__).parent.parent / "assets" / "abastible-logo.png")
 ALLOWED_ORIGINS = {
     "https://abastible-sales.vercel.app",
-    "http://localhost:5000",
+    "http://localhost:5001",
     "http://localhost:3000",
 }
 
@@ -178,3 +178,7 @@ def generate_quotation():
     except Exception as e:
         logger.exception("Error generando cotización: %s", e)
         return _cors(jsonify({"error": str(e)})), 500
+
+
+if __name__ == "__main__":
+    app.run(port=5001, debug=True)
