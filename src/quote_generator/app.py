@@ -54,7 +54,8 @@ def run() -> None:
     )
 
     Path("outputs").mkdir(parents=True, exist_ok=True)
-    output_path = str(Path("outputs") / f"cotizacion_{str(quote_number).zfill(3)}.pdf")
+    customer_slug = customer.name.lower().replace(" ", "-")
+    output_path = str(Path("outputs") / f"quotation-{quote_number}-{customer_slug}.pdf")
 
     document = QuoteDocument(
         quote_number=str(quote_number).zfill(3),

@@ -10,7 +10,7 @@ def test_calculate_pricing():
     pricing = calculate_pricing(
         quantity=18,
         unit_price_with_tax=34450,
-        discount_percent=20.0,
+        discount_percent=0.20,
     )
 
     assert pricing.subtotal == 416874

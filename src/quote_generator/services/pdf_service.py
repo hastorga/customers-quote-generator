@@ -147,20 +147,33 @@ def _draw_items_table(
     document: QuoteDocument,
     table_top: float,
 ) -> dict:
-    column_widths = [135, 38, 120, 82, 65, 58]
+    has_description = any(item.description for item in document.items)
+
+    if has_description:
+        column_widths = [130, 38, 130, 82, 65, 53]
+        alignments = ["L", "C", "L", "R", "C", "R"]
+        headers = [
+            UI_STRINGS['table_item'],
+            UI_STRINGS['table_qty'],
+            UI_STRINGS['table_desc'],
+            UI_STRINGS['table_unit_price'],
+            UI_STRINGS['table_discount'],
+            UI_STRINGS['table_total'],
+        ]
+    else:
+        column_widths = [220, 45, 100, 73, 60]
+        alignments = ["L", "C", "R", "C", "R"]
+        headers = [
+            UI_STRINGS['table_item'],
+            UI_STRINGS['table_qty'],
+            UI_STRINGS['table_unit_price'],
+            UI_STRINGS['table_discount'],
+            UI_STRINGS['table_total'],
+        ]
+
     table_x = MARGIN_LEFT
     table_width = sum(column_widths)
     row_height = 9 * mm
-    alignments = ["C", "C", "L", "R", "C", "R"]
-
-    headers = [
-        UI_STRINGS['table_item'],
-        UI_STRINGS['table_qty'],
-        UI_STRINGS['table_desc'],
-        UI_STRINGS['table_unit_price'],
-        UI_STRINGS['table_discount'],
-        UI_STRINGS['table_total'],
-    ]
 
     pdf.setFillColor(ABAS_BLUE)
     pdf.rect(table_x, table_top - row_height, table_width, row_height, fill=1, stroke=0)
@@ -186,14 +199,24 @@ def _draw_items_table(
         pdf.rect(table_x, row_y, table_width, row_height, fill=0, stroke=1)
 
         pricing = calculate_pricing(item.quantity, item.unit_price_with_tax, item.discount_percent)
-        row_values = [
-            str(idx + 1),
-            str(item.quantity),
-            item.description,
-            format_clp_int(round(item.unit_price_with_tax / 1.19)),
-            f"{item.discount_percent:g}%",
-            format_clp_int(pricing.subtotal),
-        ]
+        discount_display = f"{item.discount_percent * 100:g}%"
+        if has_description:
+            row_values = [
+                item.name,
+                str(item.quantity),
+                item.description,
+                format_clp_int(round(item.unit_price_with_tax / 1.19)),
+                discount_display,
+                format_clp_int(pricing.subtotal),
+            ]
+        else:
+            row_values = [
+                item.name,
+                str(item.quantity),
+                format_clp_int(round(item.unit_price_with_tax / 1.19)),
+                discount_display,
+                format_clp_int(pricing.subtotal),
+            ]
 
         pdf.setFont("Helvetica", 8)
         pdf.setFillColor(DARK_GRAY)

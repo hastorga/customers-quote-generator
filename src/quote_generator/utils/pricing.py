@@ -20,7 +20,7 @@ def calculate_pricing(
 ) -> PricingSummary:
     """Compute totals from a tax-included unit price using CLP integer rounding."""
     unit_price_net = unit_price_with_tax / (1 + tax_rate)
-    unit_price_discounted = unit_price_net * (1 - discount_percent / 100)
+    unit_price_discounted = unit_price_net * (1 - discount_percent)
     subtotal = round(quantity * unit_price_discounted)
     tax = round(subtotal * tax_rate)
     total = subtotal + tax
