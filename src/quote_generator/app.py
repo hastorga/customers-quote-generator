@@ -39,8 +39,6 @@ def run() -> None:
         contact_name=args.contact_name,
         company_name=customer.name,
         tax_id=customer.rut,
-        address=customer.address,
-        city=customer.city,
     )
     quote_item = QuoteItem(
         name=first.format_code,

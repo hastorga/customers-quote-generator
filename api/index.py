@@ -26,9 +26,18 @@ from quote_generator.supabase_client import (
 from quote_generator.utils.pricing import PricingSummary, calculate_pricing
 
 LOGO_PATH = str(Path(__file__).parent.parent / "assets" / "abastible-logo.png")
-ALLOWED_ORIGIN = "https://abastible-sales.vercel.app"
+ALLOWED_ORIGINS = {
+    "https://abastible-sales.vercel.app",
+    "http://localhost:5000",
+    "http://localhost:3000",
+}
 
 app = Flask(__name__)
+
+
+def _allowed_origin() -> str:
+    origin = request.headers.get("Origin", "")
+    return origin if origin in ALLOWED_ORIGINS else next(iter(ALLOWED_ORIGINS))
 
 
 @app.before_request
@@ -39,7 +48,7 @@ def _log_request() -> None:
 @app.after_request
 def _log_response(response: Response) -> Response:
     logger.info("← %s %s %s", request.method, request.path, response.status_code)
-    response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+    response.headers["Access-Control-Allow-Origin"] = _allowed_origin()
     response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
@@ -58,7 +67,7 @@ def _method_not_allowed(e: Exception) -> tuple[Response, int]:
 
 
 def _cors(response: Response) -> Response:
-    response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+    response.headers["Access-Control-Allow-Origin"] = _allowed_origin()
     response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
