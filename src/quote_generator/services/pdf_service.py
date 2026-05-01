@@ -96,8 +96,6 @@ def _draw_client_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y:
         (UI_STRINGS['to'], document.client.contact_name),
         (UI_STRINGS['company'], document.client.company_name),
         (UI_STRINGS['tax_id'], document.client.tax_id),
-        (UI_STRINGS['address'], document.client.address),
-        (UI_STRINGS['city'], document.client.city),
     ]
 
     row_height = 5.8 * mm

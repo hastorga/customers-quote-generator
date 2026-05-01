@@ -44,8 +44,7 @@ def _mock_chain(final_response: MagicMock) -> MagicMock:
 
 class TestFetchCustomer:
     def test_maps_row_to_customer_data(self):
-        row_data = {"name": "Ingredion Chile S.A.", "rut": "96.845.100-6",
-                    "address": "Av. Canaveral 240", "city": "Santiago"}
+        row_data = {"name": "Ingredion Chile S.A.", "rut": "96.845.100-6"}
         mock_client = MagicMock()
         mock_client.table.return_value = _mock_chain(_make_response(row_data))
 
@@ -55,11 +54,9 @@ class TestFetchCustomer:
         assert isinstance(result, CustomerData)
         assert result.name == "Ingredion Chile S.A."
         assert result.rut == "96.845.100-6"
-        assert result.address == "Av. Canaveral 240"
-        assert result.city == "Santiago"
 
     def test_queries_correct_table_and_id(self):
-        row_data = {"name": "X", "rut": "1-9", "address": "A", "city": "B"}
+        row_data = {"name": "X", "rut": "1-9"}
         mock_client = MagicMock()
         chain = _mock_chain(_make_response(row_data))
         mock_client.table.return_value = chain
@@ -68,7 +65,7 @@ class TestFetchCustomer:
             fetch_customer("my-uuid")
 
         mock_client.table.assert_called_once_with("customers")
-        chain.select.assert_called_once_with("name, rut, address, city")
+        chain.select.assert_called_once_with("name, rut")
         chain.eq.assert_called_once_with("id", "my-uuid")
 
 

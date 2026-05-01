@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
 import tempfile
@@ -7,6 +8,9 @@ from datetime import date
 from pathlib import Path
 
 from flask import Flask, Response, jsonify, request
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -25,6 +29,32 @@ LOGO_PATH = str(Path(__file__).parent.parent / "assets" / "abastible-logo.png")
 ALLOWED_ORIGIN = "https://abastible-sales.vercel.app"
 
 app = Flask(__name__)
+
+
+@app.before_request
+def _log_request() -> None:
+    logger.info("→ %s %s", request.method, request.path)
+
+
+@app.after_request
+def _log_response(response: Response) -> Response:
+    logger.info("← %s %s %s", request.method, request.path, response.status_code)
+    response.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
+
+@app.errorhandler(404)
+def _not_found(e: Exception) -> tuple[Response, int]:
+    logger.warning("404 %s %s", request.method, request.path)
+    return jsonify({"error": "ruta no encontrada"}), 404
+
+
+@app.errorhandler(405)
+def _method_not_allowed(e: Exception) -> tuple[Response, int]:
+    logger.warning("405 %s %s", request.method, request.path)
+    return jsonify({"error": "método no permitido"}), 405
 
 
 def _cors(response: Response) -> Response:
@@ -106,8 +136,6 @@ def generate_quotation():
             contact_name=contact_name,
             company_name=customer.name,
             tax_id=customer.rut,
-            address=customer.address,
-            city=customer.city,
         )
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -139,4 +167,5 @@ def generate_quotation():
         return _cors(response)
 
     except Exception as e:
+        logger.exception("Error generando cotización: %s", e)
         return _cors(jsonify({"error": str(e)})), 500

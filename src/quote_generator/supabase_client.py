@@ -18,8 +18,6 @@ def _get_client() -> Client:
 class CustomerData:
     name: str
     rut: str
-    address: str
-    city: str
 
 
 @dataclass
@@ -36,13 +34,13 @@ def fetch_customer(customer_id: str) -> CustomerData:
     client = _get_client()
     row = (
         client.table("customers")
-        .select("name, rut, address, city")
+        .select("name, rut")
         .eq("id", customer_id)
         .single()
         .execute()
     )
     d = cast(dict[str, Any], row.data)
-    return CustomerData(name=str(d["name"]), rut=str(d["rut"]), address=str(d["address"]), city=str(d["city"]))
+    return CustomerData(name=str(d["name"]), rut=str(d["rut"]))
 
 
 def resolve_items(

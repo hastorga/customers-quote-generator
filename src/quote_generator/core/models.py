@@ -19,8 +19,6 @@ class ClientInfo:
     contact_name: str
     company_name: str
     tax_id: str
-    address: str
-    city: str
 
 
 @dataclass(frozen=True)
