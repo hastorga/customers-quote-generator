@@ -92,11 +92,18 @@ def _draw_issuer_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y:
 
 
 def _draw_client_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y: float) -> float:
-    rows = [
-        (UI_STRINGS['to'], document.client.contact_name),
-        (UI_STRINGS['company'], document.client.company_name),
-        (UI_STRINGS['tax_id'], document.client.tax_id),
-    ]
+    client = document.client
+    if client.is_company:
+        rows = [
+            (UI_STRINGS['to'], client.contact_name),
+            (UI_STRINGS['company'], client.company_name),
+            (UI_STRINGS['tax_id'], client.tax_id),
+        ]
+    else:
+        rows = [
+            (UI_STRINGS['natural_person'], client.company_name),
+            (UI_STRINGS['tax_id'], client.tax_id),
+        ]
 
     row_height = 5.8 * mm
     date_height = 7 * mm

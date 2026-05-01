@@ -6,6 +6,7 @@ from pathlib import Path
 
 from quote_generator.core.constants import DEFAULT_ISSUER, VALIDITY_DAYS
 from quote_generator.core.models import ClientInfo, QuoteDocument, QuoteItem
+from quote_generator.utils.customers import detect_is_company
 from quote_generator.services.pdf_service import render_quote_pdf
 from quote_generator.supabase_client import _get_client, fetch_customer, resolve_items, save_quotation
 from quote_generator.utils.formatting import format_clp_int
@@ -36,9 +37,10 @@ def run() -> None:
 
     first = resolved[0]
     client_info = ClientInfo(
-        contact_name=args.contact_name,
         company_name=customer.name,
         tax_id=customer.rut,
+        contact_name=args.contact_name,
+        is_company=detect_is_company(customer.rut, customer.name),
     )
     quote_item = QuoteItem(
         name=first.format_code,

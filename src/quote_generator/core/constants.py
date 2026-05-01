@@ -38,6 +38,7 @@ UI_STRINGS = {
     "quote_title": "COTIZACIÓN #",
     "tax_id": "RUT:",
     "to": "SEÑOR(ES):",
+    "natural_person": "SR./SRA.:",
     "company": "EMPRESA:",
     "address": "DIRECCIÓN:",
     "city": "CIUDAD:",

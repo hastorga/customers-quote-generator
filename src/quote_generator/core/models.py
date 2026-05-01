@@ -19,6 +19,7 @@ class ClientInfo:
     company_name: str
     tax_id: str
     contact_name: str = ""
+    is_company: bool = True
 
 
 @dataclass(frozen=True)
