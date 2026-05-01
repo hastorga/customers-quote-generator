@@ -28,7 +28,9 @@ from quote_generator.utils.pricing import PricingSummary, calculate_pricing
 
 LOGO_PATH = str(Path(__file__).parent.parent / "assets" / "abastible-logo.png")
 ALLOWED_ORIGINS = {
-    "https://abastible-sales.vercel.app",
+    "https://abastible-llayllay.vercel.app",
+    "https://abastible-sales-vue-hastorgas-projects.vercel.app",
+    "https://abastible-sales-vue-git-main-hastorgas-projects.vercel.app",
     "http://localhost:5173",
     "http://localhost:5001",
     "http://localhost:3000",
