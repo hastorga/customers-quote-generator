@@ -166,7 +166,7 @@ def generate_quotation():
         total_subtotal = 0
         for r in resolved:
             qi = QuoteItem(
-                name=r.format_code,
+                name=r.display_name or r.format_code,
                 quantity=r.quantity,
                 description=r.description,
                 unit_price_with_tax=r.unit_price_with_tax,

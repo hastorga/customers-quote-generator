@@ -37,6 +37,7 @@ class ResolvedItem:
     unit_price_with_tax: int  # list_prices.price or cylinders.cylinder_price — already includes 19% VAT
     discount_pct: float       # 0.0 for cylinders; customer_discounts.discount or request value for refills
     cylinder_id: int | None = None
+    display_name: str = ""    # human-readable name for PDF; empty = fall back to ITEM_NAMES lookup
 
 
 def fetch_customer(customer_id: str) -> CustomerData:
@@ -104,6 +105,7 @@ def resolve_items(
                 unit_price_with_tax=cylinder.cylinder_price,
                 discount_pct=0.0,
                 cylinder_id=cylinder.id,
+                display_name=f"Cilindro {cylinder.name}",
             ))
             continue
 
