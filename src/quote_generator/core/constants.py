@@ -37,7 +37,7 @@ ITEM_NAMES: dict[str, str] = {
 UI_STRINGS = {
     "quote_title": "COTIZACIÓN #",
     "tax_id": "RUT:",
-    "to": "ATENCIÓN:",
+    "to": "PARA:",
     "natural_person": "NOMBRE:",
     "company": "EMPRESA:",
     "address": "DIRECCIÓN:",
