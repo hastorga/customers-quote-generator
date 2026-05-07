@@ -138,13 +138,15 @@ def _draw_client_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y:
     pdf.setLineWidth(0.4)
     pdf.line(inner_x, divider_y, box_x + box_width - 4, divider_y)
 
+    value_max_w = box_x + box_width - value_x - 4
     for idx, (label, value) in enumerate(rows):
         row_y = divider_y - (idx + 0.7) * row_height
         pdf.setFont("Helvetica-Bold", 7.5)
         pdf.setFillColor(TEXT_GRAY)
         pdf.drawString(inner_x, row_y, label)
+        pdf.setFont("Helvetica", 7.5)
         pdf.setFillColor(DARK_GRAY)
-        pdf.drawString(value_x, row_y, value)
+        pdf.drawString(value_x, row_y, _fit_text(pdf, value, "Helvetica", 7.5, value_max_w))
 
     return box_y
 
@@ -206,7 +208,7 @@ def _draw_items_table(
         pdf.rect(table_x, row_y, table_width, row_height, fill=0, stroke=1)
 
         pricing = calculate_pricing(item.quantity, item.unit_price_with_tax, item.discount_percent)
-        discount_display = f"{item.discount_percent * 100:g}%"
+        discount_display = "—" if item.discount_percent == 0.0 else f"{item.discount_percent * 100:g}%"
         if has_description:
             row_values = [
                 ITEM_NAMES.get(item.name, item.name),
@@ -311,6 +313,14 @@ def _draw_footer(pdf: canvas.Canvas) -> None:
     pdf.setFont("Helvetica-Bold", 8.5)
     pdf.setFillColor(WHITE)
     pdf.drawCentredString(PAGE_WIDTH / 2, footer_height - 6 * mm, UI_STRINGS['footer_msg'])
+
+
+def _fit_text(pdf: canvas.Canvas, text: str, font_name: str, font_size: float, max_width: float) -> str:
+    if pdf.stringWidth(text, font_name, font_size) <= max_width:
+        return text
+    while text and pdf.stringWidth(text + "…", font_name, font_size) > max_width:
+        text = text[:-1]
+    return text + "…"
 
 
 def _draw_aligned_text(

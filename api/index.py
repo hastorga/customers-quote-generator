@@ -77,18 +77,33 @@ def _cors(response: Response) -> Response:
     return response
 
 
-def _validate_items(items: list[dict]) -> str | None:
+def _validate_items(items: list[dict], is_prospect: bool) -> str | None:
     if not items:
         return "items debe ser una lista no vacía"
     for i, it in enumerate(items):
-        if "list_price_id" not in it:
-            return f"items[{i}]: falta list_price_id"
+        item_type = str(it.get("type") or "refill")
+        if item_type not in ("refill", "cylinder"):
+            return f"items[{i}]: type debe ser 'refill' o 'cylinder'"
+
         try:
             qty = int(it.get("quantity", 0))
         except (TypeError, ValueError):
             return f"items[{i}]: quantity debe ser un entero"
         if qty <= 0:
             return f"items[{i}]: quantity debe ser > 0"
+
+        if item_type == "refill":
+            if "list_price_id" not in it:
+                return f"items[{i}]: falta list_price_id"
+            if is_prospect and "discount_pct" not in it:
+                return f"items[{i}]: falta discount_pct (requerido para prospectos)"
+        elif item_type == "cylinder":
+            if "cylinder_id" not in it:
+                return f"items[{i}]: falta cylinder_id"
+            try:
+                int(it["cylinder_id"])
+            except (TypeError, ValueError):
+                return f"items[{i}]: cylinder_id debe ser un entero"
     return None
 
 
@@ -101,11 +116,21 @@ def options():
 def generate_quotation():
     try:
         body = request.get_json(force=True)
-        customer_id: str = body["customer_id"]
+        customer_id: str | None = body.get("customer_id") or None
+        prospect_name: str | None = body.get("prospect_name") or None
+        prospect_rut: str | None = body.get("prospect_rut") or None
         contact_name: str = body.get("contact_name") or ""
         notes: str | None = body.get("notes")
-        items: list[dict] = body["items"]
-        error = _validate_items(items)
+        items: list[dict] = body.get("items") or []
+
+        is_prospect = customer_id is None
+
+        if is_prospect and not (prospect_name and prospect_rut):
+            return _cors(jsonify({"error": "se requiere customer_id o (prospect_name + prospect_rut)"})), 400
+        if not is_prospect and (prospect_name or prospect_rut):
+            return _cors(jsonify({"error": "no se puede enviar customer_id junto a prospect_name/prospect_rut"})), 400
+
+        error = _validate_items(items, is_prospect)
         if error:
             return _cors(jsonify({"error": error})), 400
     except (KeyError, TypeError) as e:
@@ -113,8 +138,26 @@ def generate_quotation():
 
     try:
         today = date.today()
-        customer = fetch_customer(customer_id)
-        resolved = resolve_items(customer_id, items, today)
+
+        if is_prospect:
+            client_info = ClientInfo(
+                company_name=prospect_name,  # type: ignore[arg-type]
+                tax_id=prospect_rut,         # type: ignore[arg-type]
+                contact_name=contact_name,
+                is_company=detect_is_company(prospect_rut, prospect_name),  # type: ignore[arg-type]
+            )
+            customer_slug = prospect_name.lower().replace(" ", "-")  # type: ignore[union-attr]
+        else:
+            customer = fetch_customer(customer_id)  # type: ignore[arg-type]
+            client_info = ClientInfo(
+                company_name=customer.name,
+                tax_id=customer.rut,
+                contact_name=contact_name,
+                is_company=detect_is_company(customer.rut, customer.name),
+            )
+            customer_slug = customer.name.lower().replace(" ", "-")
+
+        resolved = resolve_items(customer_id, items, today, is_prospect=is_prospect)
 
         rpc_result = _get_client().rpc("nextval_for_quote", {}).execute()
         quote_number = int(rpc_result.data)  # type: ignore
@@ -123,7 +166,7 @@ def generate_quotation():
         total_subtotal = 0
         for r in resolved:
             qi = QuoteItem(
-                name=r.format_code,
+                name=r.display_name or r.format_code,
                 quantity=r.quantity,
                 description=r.description,
                 unit_price_with_tax=r.unit_price_with_tax,
@@ -141,13 +184,6 @@ def generate_quotation():
             subtotal=total_subtotal,
             tax=total_tax,
             total=total_subtotal + total_tax,
-        )
-
-        client_info = ClientInfo(
-            company_name=customer.name,
-            tax_id=customer.rut,
-            contact_name=contact_name,
-            is_company=detect_is_company(customer.rut, customer.name),
         )
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
@@ -168,9 +204,16 @@ def generate_quotation():
             pdf_bytes = f.read()
         os.unlink(tmp_path)
 
-        save_quotation(quote_number, customer_id, contact_name, resolved, notes)
+        save_quotation(
+            quote_number,
+            customer_id,
+            contact_name,
+            resolved,
+            notes,
+            prospect_name=prospect_name,
+            prospect_rut=prospect_rut,
+        )
 
-        customer_slug = customer.name.lower().replace(" ", "-")
         filename = f"quotation-{quote_number}-{customer_slug}.pdf"
         response = Response(
             pdf_bytes,
@@ -179,6 +222,8 @@ def generate_quotation():
         )
         return _cors(response)
 
+    except ValueError as e:
+        return _cors(jsonify({"error": str(e)})), 400
     except Exception as e:
         logger.exception("Error generando cotización: %s", e)
         return _cors(jsonify({"error": str(e)})), 500
