@@ -206,7 +206,7 @@ def _draw_items_table(
         pdf.rect(table_x, row_y, table_width, row_height, fill=0, stroke=1)
 
         pricing = calculate_pricing(item.quantity, item.unit_price_with_tax, item.discount_percent)
-        discount_display = f"{item.discount_percent * 100:g}%"
+        discount_display = "—" if item.discount_percent == 0.0 else f"{item.discount_percent * 100:g}%"
         if has_description:
             row_values = [
                 ITEM_NAMES.get(item.name, item.name),
