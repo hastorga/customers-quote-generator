@@ -34,6 +34,8 @@ def _mock_chain(final_response: MagicMock) -> MagicMock:
     chain.eq.return_value = chain
     chain.lte.return_value = chain
     chain.or_.return_value = chain
+    chain.order.return_value = chain
+    chain.limit.return_value = chain
     chain.single.return_value = chain
     chain.insert.return_value = chain
     chain.execute.return_value = final_response
@@ -210,6 +212,48 @@ class TestResolveItems:
         assert item.cylinder_id == 2
         assert item.list_price_id is None
         assert item.format_code == "GAS11N"
+
+    def test_discount_query_excludes_same_day_closed_records(self):
+        # Regression: when a discount is changed today, the old row is closed with
+        # valid_until = today and a new row opens with valid_from = today. The query
+        # must treat valid_until as exclusive (gt, not gte) and pick the newest open
+        # row, otherwise the stale discount leaks into the quotation.
+        lp_data = {"id": "lp-1", "format_code": "GAS05N", "price": 16400}
+        disc_chain = _mock_chain(_make_response([{"discount": "0.20"}]))
+        lp_chain = _mock_chain(_make_response(lp_data))
+        mock_client = MagicMock()
+        mock_client.table.side_effect = [lp_chain, disc_chain]
+
+        ref = date(2026, 5, 27)
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            result = resolve_items(
+                "cust-panquehue",
+                [{"list_price_id": "lp-1", "quantity": 1, "description": "Recarga 5kg"}],
+                ref,
+            )
+
+        assert result[0].discount_pct == 0.20
+        # valid_until must be exclusive so a row closed today is not considered active.
+        disc_chain.or_.assert_called_once_with(f"valid_until.is.null,valid_until.gt.{ref.isoformat()}")
+        disc_chain.order.assert_called_once_with("valid_from", desc=True)
+        disc_chain.limit.assert_called_once_with(1)
+
+    def test_list_price_query_uses_exclusive_valid_until(self):
+        lp_data = {"id": "lp-1", "format_code": "GAS05N", "price": 16400}
+        lp_chain = _mock_chain(_make_response(lp_data))
+        disc_chain = _mock_chain(_make_response([]))
+        mock_client = MagicMock()
+        mock_client.table.side_effect = [lp_chain, disc_chain]
+
+        ref = date(2026, 5, 27)
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            resolve_items(
+                "cust-1",
+                [{"list_price_id": "lp-1", "quantity": 1, "description": "Recarga"}],
+                ref,
+            )
+
+        lp_chain.or_.assert_called_once_with(f"valid_until.is.null,valid_until.gt.{ref.isoformat()}")
 
     def test_cylinder_raises_when_price_not_set(self):
         cyl_data = {"id": 3, "name": "15 Kg", "cylinder_price": None, "format_code": "GAS15N"}
