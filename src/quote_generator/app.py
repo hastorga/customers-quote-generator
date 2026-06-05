@@ -16,6 +16,7 @@ from quote_generator.utils.pricing import calculate_pricing
 def run() -> None:
     parser = argparse.ArgumentParser(description="Genera una cotización PDF desde Supabase")
     parser.add_argument("--customer-id", required=True, help="UUID del cliente en Supabase")
+    parser.add_argument("--branch-id", required=True, help="UUID de la sucursal (branch) en Supabase")
     parser.add_argument("--contact-name", required=True, help="Nombre del contacto")
     parser.add_argument("--list-price-id", required=True, help="UUID del precio en list_prices")
     parser.add_argument("--quantity", type=int, required=True, help="Cantidad de unidades")
@@ -70,7 +71,14 @@ def run() -> None:
         validity_days=VALIDITY_DAYS,
     )
     render_quote_pdf(document, pricing)
-    save_quotation(quote_number, args.customer_id, args.contact_name, resolved, args.notes)
+    save_quotation(
+        quote_number,
+        args.customer_id,
+        args.contact_name,
+        resolved,
+        args.notes,
+        branch_id=args.branch_id,
+    )
 
     print(f"PDF generado: {output_path}")
     print(f"Subtotal: $ {format_clp_int(pricing.subtotal)}")
