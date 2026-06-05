@@ -116,6 +116,7 @@ def options():
 def generate_quotation():
     try:
         body = request.get_json(force=True)
+        branch_id: str | None = body.get("branch_id") or None
         customer_id: str | None = body.get("customer_id") or None
         prospect_name: str | None = body.get("prospect_name") or None
         prospect_rut: str | None = body.get("prospect_rut") or None
@@ -125,6 +126,8 @@ def generate_quotation():
 
         is_prospect = customer_id is None
 
+        if not branch_id:
+            return _cors(jsonify({"error": "se requiere branch_id"})), 400
         if is_prospect and not (prospect_name and prospect_rut):
             return _cors(jsonify({"error": "se requiere customer_id o (prospect_name + prospect_rut)"})), 400
         if not is_prospect and (prospect_name or prospect_rut):
@@ -210,6 +213,7 @@ def generate_quotation():
             contact_name,
             resolved,
             notes,
+            branch_id=branch_id,
             prospect_name=prospect_name,
             prospect_rut=prospect_rut,
         )

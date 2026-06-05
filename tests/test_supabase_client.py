@@ -285,7 +285,7 @@ class TestSaveQuotation:
         ]
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            qid = save_quotation(42, "cust-1", "Juan", items, notes=None)
+            qid = save_quotation(42, "cust-1", "Juan", items, notes=None, branch_id="branch-1")
 
         assert qid == "quot-uuid-1"
 
@@ -298,7 +298,7 @@ class TestSaveQuotation:
         items = [ResolvedItem("lp-1", "GAS-45", "Desc", 2, 10000, 0.0)]
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            save_quotation(7, "cust-7", "María", items, notes="nota")
+            save_quotation(7, "cust-7", "María", items, notes="nota", branch_id="branch-7")
 
         inserted = q_chain.insert.call_args[0][0]
         assert inserted["number"] == 7
@@ -306,6 +306,7 @@ class TestSaveQuotation:
         assert inserted["contact_name"] == "María"
         assert inserted["status"] == "draft"
         assert inserted["notes"] == "nota"
+        assert inserted["branch_id"] == "branch-7"
 
     def test_inserts_quotation_items_with_positions(self):
         mock_client = MagicMock()
@@ -319,13 +320,15 @@ class TestSaveQuotation:
         ]
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            save_quotation(1, "cust-1", "X", items, notes=None)
+            save_quotation(1, "cust-1", "X", items, notes=None, branch_id="branch-1")
 
         qi_inserted = qi_chain.insert.call_args[0][0]
         assert qi_inserted[0]["position"] == 1
         assert qi_inserted[1]["position"] == 2
         assert qi_inserted[0]["format_code"] == "A"
         assert qi_inserted[1]["discount_pct"] == 5.0
+        assert qi_inserted[0]["branch_id"] == "branch-1"
+        assert qi_inserted[1]["branch_id"] == "branch-1"
 
     def test_notes_defaults_to_empty_string_when_none(self):
         mock_client = MagicMock()
@@ -334,7 +337,7 @@ class TestSaveQuotation:
         mock_client.table.side_effect = [q_chain, qi_chain]
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            save_quotation(1, "c", "X", [ResolvedItem(list_price_id="lp-1", format_code="A", description="", quantity=1, unit_price_with_tax=100, discount_pct=0.0)], notes=None)
+            save_quotation(1, "c", "X", [ResolvedItem(list_price_id="lp-1", format_code="A", description="", quantity=1, unit_price_with_tax=100, discount_pct=0.0)], notes=None, branch_id="branch-1")
 
         inserted = q_chain.insert.call_args[0][0]
         assert inserted["notes"] == ""
@@ -350,6 +353,7 @@ class TestSaveQuotation:
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
             save_quotation(
                 10, None, "Juan", items, notes=None,
+                branch_id="branch-1",
                 prospect_name="Comercio El Roble",
                 prospect_rut="12.345.678-9",
             )
@@ -368,7 +372,7 @@ class TestSaveQuotation:
         items = [ResolvedItem(list_price_id=None, format_code="GAS11N", description="Cilindro nuevo", quantity=1, unit_price_with_tax=85000, discount_pct=0.0, cylinder_id=2)]
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            save_quotation(5, "cust-1", "X", items, notes=None)
+            save_quotation(5, "cust-1", "X", items, notes=None, branch_id="branch-1")
 
         qi_inserted = qi_chain.insert.call_args[0][0]
         assert qi_inserted[0]["cylinder_id"] == 2

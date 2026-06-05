@@ -160,16 +160,24 @@ def save_quotation(
     contact_name: str,
     resolved_items: list[ResolvedItem],
     notes: str | None,
+    *,
+    branch_id: str,
     prospect_name: str | None = None,
     prospect_rut: str | None = None,
 ) -> str:
-    """Insert quotation and its items into Supabase, returning the new quotation id."""
+    """Insert quotation and its items into Supabase, returning the new quotation id.
+
+    ``branch_id`` must be supplied explicitly: this service inserts with the
+    service-role key (no authenticated user), so the ``branch_id`` column default
+    ``current_branch_id()`` resolves to NULL and violates the NOT NULL constraint.
+    """
     client = _get_client()
     today = date.today().isoformat()
 
     q_payload: dict[str, Any] = {
         "number": number,
         "date": today,
+        "branch_id": branch_id,
         "customer_id": customer_id,
         "contact_name": contact_name,
         "status": "draft",
@@ -187,6 +195,7 @@ def save_quotation(
     qi_rows: list[Any] = [
         {
             "quotation_id": quotation_id,
+            "branch_id": branch_id,
             "list_price_id": item.list_price_id,
             "cylinder_id": item.cylinder_id,
             "position": idx + 1,
