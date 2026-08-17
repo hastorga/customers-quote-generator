@@ -37,7 +37,7 @@ src/quote_generator/
 
 ## Key Concepts
 
-**Tax-inclusive pricing model**: Unit prices in the system already include 19% IVA (VAT). `calculate_pricing()` in `utils/pricing.py` extracts the net price by dividing by 1.19, applies discounts on the net price, then recomputes IVA on top. Only the final subtotal and tax amounts are rounded to integer CLP (no decimal pesos).
+**Tax-inclusive pricing model**: Unit prices in the system already include 19% IVA (VAT), and the quote is anchored on that tax-included price so it agrees with SAP peso for peso — SAP is the source of truth for what the customer is charged. `calculate_pricing()` in `utils/pricing.py` applies the discount to the tax-included unit price via `resolve_discounted_price()`, which rounds to the nearest peso **with ties going down** (SAP drops the half peso). Rounding per unit before multiplying by the quantity is deliberate: carrying an unrounded price into the multiplication makes the line total drift as the quantity grows. The net subtotal is then derived from the line total and the tax is the remainder, so `subtotal + tax == total` always holds exactly.
 
 **Supabase service**: `SupabaseService` returns mock data and is not connected to a real database. It's designed to be swapped for a live implementation.
 

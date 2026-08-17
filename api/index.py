@@ -167,6 +167,7 @@ def generate_quotation():
 
         quote_items: list[QuoteItem] = []
         total_subtotal = 0
+        total_gross = 0
         for r in resolved:
             qi = QuoteItem(
                 name=r.display_name or r.format_code,
@@ -175,18 +176,20 @@ def generate_quotation():
                 unit_price_with_tax=r.unit_price_with_tax,
                 discount_percent=r.discount_pct,
             )
-            total_subtotal += calculate_pricing(
-                qi.quantity, qi.unit_price_with_tax, qi.discount_percent
-            ).subtotal
+            line = calculate_pricing(qi.quantity, qi.unit_price_with_tax, qi.discount_percent)
+            total_subtotal += line.subtotal
+            total_gross += line.total
             quote_items.append(qi)
 
-        total_tax = round(total_subtotal * 0.19)
+        # The total is the sum of the tax-included line totals, so it matches SAP
+        # exactly; the tax is the remainder, so the printed rows always add up.
+        total_tax = total_gross - total_subtotal
         totals = PricingSummary(
             unit_price_net=0.0,
-            unit_price_discounted=0.0,
+            unit_price_gross_discounted=0,
             subtotal=total_subtotal,
             tax=total_tax,
-            total=total_subtotal + total_tax,
+            total=total_gross,
         )
 
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
