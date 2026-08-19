@@ -51,7 +51,6 @@ TAX_RATE = 0.19
 # Commercial blocks printed under the totals. The bracketed entries are
 # placeholders — fill them in with the real terms before sending quotes out.
 PAYMENT_TERMS: tuple[str, ...] = (
-    "CONDICIONES DE PAGO",
     "Precios en CLP con descuento aplicado.",
     "Validez: {days} días calendario.",
 )
