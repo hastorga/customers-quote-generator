@@ -92,6 +92,8 @@ pyroaring==1.0.4
     # via pyiceberg
 python-dateutil==2.9.0.post0
     # via strictyaml
+python-dotenv==1.2.2
+    # via customers-quote-generator
 realtime==2.29.0
     # via supabase
 reportlab==4.4.10
