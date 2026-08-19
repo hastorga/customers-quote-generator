@@ -13,11 +13,16 @@ load_dotenv()
 def _lines_from_env(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
     """Read a block of printed lines from the environment, one line per entry.
 
+    Accepts "|" as well as real newlines: a multi-line value survives poorly
+    through a dashboard field, a shell and a CLI flag, and once stored as a
+    sensitive variable it cannot be read back to check. A single line split on
+    "|" is verifiable and safe to edit anywhere.
+
     Falls back to the bracketed placeholders rather than to nothing: an
     unconfigured deploy should print something visibly wrong on the quote, not
     silently drop the seller's bank details.
     """
-    raw = os.environ.get(name, "")
+    raw = os.environ.get(name, "").replace("|", "\n")
     lines = tuple(line.strip() for line in raw.splitlines() if line.strip())
     return lines or default
 
