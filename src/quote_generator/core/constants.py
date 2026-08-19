@@ -1,7 +1,16 @@
 import os
 
-from dotenv import load_dotenv
 from reportlab.lib import colors
+
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:  # pragma: no cover
+    # Reading .env is a local-development convenience; the deployed function
+    # gets its configuration injected by the platform. Missing the package must
+    # never be able to take the service down at import time, as it once did.
+    def load_dotenv() -> None:
+        return None
+
 
 from quote_generator.core.models import IssuerInfo
 
