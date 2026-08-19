@@ -2,10 +2,13 @@
 __pycache__/
 *.py[cod]
 .env
+.env.*
+!.env.example
 *.pdf
 *.docx
 *.txt
 !api/requirements.txt
+!assets/fonts/OFL.txt
 /outputs/*
 .vercel
 .DS_Store
