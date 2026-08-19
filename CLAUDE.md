@@ -28,6 +28,7 @@ src/quote_generator/
 │   └── constants.py     # Brand colors, UI strings (Spanish), default issuer, VALIDITY_DAYS
 ├── services/
 │   ├── pdf_service.py   # ReportLab PDF rendering
+│   ├── fonts.py         # Registers the Nunito Sans faces, falls back to Helvetica
 │   └── supabase_service.py  # Data fetching — currently mocked, not wired to real API
 ├── utils/
 │   ├── pricing.py       # Tax-inclusive pricing calculations and CLP rounding
@@ -45,4 +46,14 @@ src/quote_generator/
 
 **UI strings are in Spanish** — keep all user-visible text in Spanish for the Chilean market.
 
-**Assets**: Logo lives at `assets/abastible-logo.png`. Output PDFs are written to `outputs/` (auto-created).
+**Quote layout**: The PDF follows the "Editorial" design direction — a white page with no colour bands, the quote number set large in Abastible blue, a borderless table and the total as the one orange element. Measurements in `pdf_service.py` come from an 816x1056 px artboard (US Letter at 96 dpi) scaled by 72/96 into points; keep that relationship when adjusting the layout.
+
+**Net vs tax-included presentation**: The table is presented **net**, because that is what customers ask for, while the arithmetic stays anchored on the tax-included SAP price. The net unit price prints with two decimals on purpose — rounded to a whole peso it no longer multiplies back to the line's net total (off by up to 13 pesos), which a customer with a calculator will find. `P. unit. c/IVA` sits alongside it as the SAP anchor. Per-line net totals sum exactly to the `Neto` row because both derive from `calculate_pricing().subtotal`.
+
+**Brand colors**: `ABAS_BLUE` (#011689) and `ORANGE` (#FC4F00) are sampled from the official logo files. Do not adjust them by eye.
+
+**Typography**: Nunito Sans (OFL) ships in `assets/fonts/`. `brand_fonts()` registers the faces once per process and falls back to Helvetica if a file is missing, so a bad deploy degrades instead of failing. Keep `!assets/fonts/OFL.txt` in `.gitignore` — the blanket `*.txt` rule would otherwise drop the license.
+
+**Commercial blocks**: `PAYMENT_TERMS` and `TRANSFER_DETAILS` in `constants.py` print under the totals and still carry bracketed placeholders (`[BANCO]`, `[N° DE CUENTA]`). Fill them in before sending quotes to customers.
+
+**Assets**: The official lockup lives at `assets/abastible-lockup.png` (cropped from `extended-iso-logo.jpg`, so it carries its own blue field). Output PDFs are written to `outputs/` (auto-created).

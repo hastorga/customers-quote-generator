@@ -14,6 +14,12 @@ class PricingSummary:
     subtotal: int
     tax: int
     total: int
+    # Net unit price *after* the discount. Quotes are presented net because that
+    # is what customers ask for, and this is the only net figure that multiplies
+    # back to the line's net total — the list-price `unit_price_net` above does
+    # not. Defaults to 0.0 so callers that build a document-level summary by
+    # summing lines (api/index.py) need not supply a per-unit value.
+    unit_price_net_discounted: float = 0.0
 
 
 def resolve_discounted_price(unit_price_with_tax: float, discount_percent: float) -> int:
@@ -62,4 +68,5 @@ def calculate_pricing(
         subtotal=subtotal,
         tax=tax,
         total=total,
+        unit_price_net_discounted=unit_price_gross_discounted / (1 + tax_rate),
     )

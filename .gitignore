@@ -6,6 +6,7 @@ __pycache__/
 *.docx
 *.txt
 !api/requirements.txt
+!assets/fonts/OFL.txt
 /outputs/*
 .vercel
 .DS_Store

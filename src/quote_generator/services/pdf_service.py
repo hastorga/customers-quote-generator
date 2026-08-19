@@ -1,339 +1,455 @@
 from __future__ import annotations
 
-from reportlab.lib.pagesizes import LETTER
-from reportlab.lib.units import cm, mm
-from reportlab.pdfgen import canvas
-from reportlab.lib import colors
+from dataclasses import dataclass
 
-from quote_generator.utils.formatting import format_clp_int
-from quote_generator.core.models import QuoteDocument
-from quote_generator.utils.pricing import PricingSummary, calculate_pricing
+from reportlab.lib.colors import Color
+from reportlab.lib.pagesizes import LETTER
+from reportlab.pdfgen import canvas
+
 from quote_generator.core.constants import (
-    ORANGE, ABAS_BLUE, DARK_GRAY, LIGHT_GRAY, MID_GRAY, TEXT_GRAY, WHITE,
-    UI_STRINGS, ITEM_NAMES,
+    ABAS_BLUE, INK, LINE, LINE_SOFT, MUTED, ORANGE, PAYMENT_TERMS,
+    TRANSFER_DETAILS, TEXT_GRAY, UI_STRINGS, ITEM_NAMES,
 )
+from quote_generator.core.models import QuoteDocument
+from quote_generator.services.fonts import brand_fonts
+from quote_generator.utils.formatting import format_clp_decimal, format_clp_int
+from quote_generator.utils.pricing import PricingSummary, calculate_pricing
 
 PAGE_WIDTH, PAGE_HEIGHT = LETTER
-MARGIN_LEFT = 2 * cm
-MARGIN_RIGHT = 2 * cm
+
+# The layout was drawn on an 816x1056 px artboard (US Letter at 96 dpi); every
+# measurement below is that design value scaled by 72/96 into points.
+MARGIN = 48.0
+TOP = PAGE_HEIGHT - 46.5
+BOTTOM = 48.0
+CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN
+CONTENT_RIGHT = PAGE_WIDTH - MARGIN
+
+# Table columns, left to right. They sum to CONTENT_WIDTH exactly.
+COL_DETAIL = 225.0
+COL_QTY = 33.0
+COL_UNIT_NET = 76.5
+COL_UNIT_GROSS = 67.5
+COL_DISCOUNT = 34.5
+COL_LINE_NET = 79.5
+
+ROW_HEIGHT = 33.0
+TABLE_HEADER_HEIGHT = 16.0
+
+# The validity note and footer line always sit at the very bottom of the page.
+FOOTER_ZONE = 40.0
+# Terms, transfer details and the signature line, measured from their top rule.
+CLOSING_BLOCK = 110.0
+# What the last row must leave free below it: totals, closing block and footer.
+CLOSING_HEIGHT = 236.0
+
+LABEL_SIZE = 6.4
+LABEL_TRACKING = 0.7
+BODY_SIZE = 8.25
+ROW_SIZE = 9.75
+SMALL_SIZE = 7.9
+
+
+@dataclass(frozen=True)
+class _Row:
+    """One printable table line, already priced."""
+
+    name: str
+    description: str
+    quantity: int
+    unit_net: str
+    unit_gross: str
+    discount: str
+    line_net: str
+
 
 def render_quote_pdf(document: QuoteDocument, totals: PricingSummary) -> None:
     pdf = canvas.Canvas(document.output_path, pagesize=LETTER)
+    pdf.setTitle(f"{UI_STRINGS['quote_title']} N° {document.quote_number}")
 
-    context = _draw_header(pdf, document)
-    table_context = _draw_items_table(pdf, document, context["content_top"])
-    totals_bottom = _draw_totals(pdf, totals, table_context)
-    _draw_validity_note(pdf, document.validity_days, totals_bottom)
-    _draw_footer(pdf)
+    rows = [_price_row(item) for item in document.items]
+
+    y = _draw_header(pdf, document)
+    y = _draw_parties(pdf, document, y)
+    y = _draw_table(pdf, document, rows, y)
+    y = _draw_totals(pdf, totals, y)
+    _draw_closing(pdf, document, y)
 
     pdf.save()
 
 
-def _draw_header(pdf: canvas.Canvas, document: QuoteDocument) -> dict[str, float]:
-    bar_height = 10 * mm
-    header_bottom = PAGE_HEIGHT - 46 * mm
+def _price_row(item) -> _Row:
+    pricing = calculate_pricing(item.quantity, item.unit_price_with_tax, item.discount_percent)
+    return _Row(
+        name=ITEM_NAMES.get(item.name, item.name),
+        description=item.description,
+        quantity=item.quantity,
+        unit_net=format_clp_decimal(pricing.unit_price_net_discounted),
+        unit_gross=format_clp_int(pricing.unit_price_gross_discounted),
+        discount="—" if item.discount_percent == 0.0 else f"{item.discount_percent * 100:g}%",
+        line_net=format_clp_int(pricing.subtotal),
+    )
 
-    pdf.setFillColor(ORANGE)
-    pdf.rect(0, PAGE_HEIGHT - bar_height, PAGE_WIDTH, bar_height, fill=1, stroke=0)
+
+def _draw_header(pdf: canvas.Canvas, document: QuoteDocument) -> float:
+    fonts = brand_fonts()
+    logo_width = 150.0
+    logo_height = logo_width / 3.70  # the lockup's aspect ratio
+    logo_top = TOP
 
     pdf.drawImage(
         document.logo_path,
-        x=MARGIN_LEFT,
-        y=header_bottom + 4 * mm,
-        width=50 * mm,
-        height=28 * mm,
+        x=MARGIN,
+        y=logo_top - logo_height,
+        width=logo_width,
+        height=logo_height,
         preserveAspectRatio=True,
+        anchor="nw",
         mask="auto",
     )
 
-    pdf.setFont("Helvetica-Bold", 22)
-    pdf.setFillColor(DARK_GRAY)
-    pdf.drawRightString(PAGE_WIDTH - MARGIN_RIGHT, header_bottom + 18 * mm, f"{UI_STRINGS['quote_title']} {document.quote_number}")
+    _label(pdf, UI_STRINGS["quote_title"], CONTENT_RIGHT, logo_top - 6, align="R")
 
-    pdf.setStrokeColor(ORANGE)
-    pdf.setLineWidth(2.5)
-    line_end = PAGE_WIDTH - MARGIN_RIGHT
-    pdf.line(line_end - 9.5 * cm, header_bottom + 14 * mm, line_end, header_bottom + 14 * mm)
-
-    separator_y = header_bottom - 2 * mm
-    pdf.setStrokeColor(MID_GRAY)
-    pdf.setLineWidth(0.5)
-    pdf.line(MARGIN_LEFT, separator_y, PAGE_WIDTH - MARGIN_RIGHT, separator_y)
-
-    issuer_bottom = _draw_issuer_block(pdf, document, separator_y)
-    client_bottom = _draw_client_block(pdf, document, separator_y)
-
-    return {"content_top": min(issuer_bottom, client_bottom) - 8 * mm}
-
-
-def _draw_issuer_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y: float) -> float:
-    top_y = separator_y - 5 * mm
-    issuer = document.issuer
-
-    pdf.setFont("Helvetica-Bold", 9)
+    pdf.setFont(fonts.light, 39)
     pdf.setFillColor(ABAS_BLUE)
-    pdf.drawString(MARGIN_LEFT, top_y, issuer.company_name)
+    pdf.drawRightString(CONTENT_RIGHT, logo_top - 43, document.quote_number)
 
-    lines = [
-        f"{UI_STRINGS['tax_id']} {issuer.tax_id}",
+    pdf.setFont(fonts.regular, BODY_SIZE)
+    pdf.setFillColor(TEXT_GRAY)
+    pdf.drawRightString(CONTENT_RIGHT, logo_top - 56, _format_date(document.issue_date))
+
+    rule_y = logo_top - 72
+    pdf.setStrokeColor(ABAS_BLUE)
+    pdf.setLineWidth(1.5)
+    pdf.line(MARGIN, rule_y, CONTENT_RIGHT, rule_y)
+
+    return rule_y - 26
+
+
+def _draw_parties(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> float:
+    issuer, client = document.issuer, document.client
+    right_x = MARGIN + CONTENT_WIDTH / 2 + 18
+
+    issuer_lines = [
         issuer.office_name,
         issuer.address,
         issuer.phone,
         issuer.email,
     ]
-    pdf.setFont("Helvetica", 7.5)
+    client_lines = [line for line in (
+        f"{UI_STRINGS['attention']} {client.contact_name}" if client.contact_name else "",
+    ) if line]
+
+    left_bottom = _party_block(
+        pdf, MARGIN, top, UI_STRINGS["issuer"], issuer.company_name,
+        issuer.tax_id, issuer_lines, MUTED,
+    )
+    right_bottom = _party_block(
+        pdf, right_x, top, UI_STRINGS["to"], client.company_name,
+        client.tax_id, client_lines, ORANGE,
+    )
+    return min(left_bottom, right_bottom) - 26
+
+
+def _party_block(
+    pdf: canvas.Canvas,
+    x: float,
+    top: float,
+    label: str,
+    name: str,
+    tax_id: str,
+    lines: list[str],
+    label_color: Color,
+) -> float:
+    fonts = brand_fonts()
+    column_width = CONTENT_WIDTH / 2 - 18
+    _label(pdf, label, x, top, color=label_color)
+
+    # A legal name wraps rather than truncating: cutting a company's registered
+    # name short on a commercial document is not an acceptable failure mode.
+    y = top - 15
+    pdf.setFont(fonts.bold, 9.75)
+    pdf.setFillColor(INK)
+    for index, line in enumerate(_wrap(pdf, name, fonts.bold, 9.75, column_width)):
+        if index:
+            y -= 11
+        pdf.drawString(x, y, line)
+
+    y -= 11
+    pdf.setFont(fonts.regular, BODY_SIZE)
     pdf.setFillColor(TEXT_GRAY)
+    pdf.drawString(x, y, f"{UI_STRINGS['tax_id']} {tax_id}")
 
-    line_gap = 5.5 * mm
-    for idx, line in enumerate(lines):
-        pdf.drawString(MARGIN_LEFT, top_y - (idx + 1) * line_gap, line)
-
-    return top_y - len(lines) * line_gap
-
-
-def _draw_client_block(pdf: canvas.Canvas, document: QuoteDocument, separator_y: float) -> float:
-    client = document.client
-    if client.is_company:
-        rows = [
-            (UI_STRINGS['to'], client.contact_name),
-            (UI_STRINGS['company'], client.company_name),
-            (UI_STRINGS['tax_id'], client.tax_id),
-        ]
-    else:
-        rows = [
-            (UI_STRINGS['natural_person'], client.company_name),
-            (UI_STRINGS['tax_id'], client.tax_id),
-        ]
-
-    row_height = 5.8 * mm
-    date_height = 7 * mm
-    padding = 3 * mm
-    box_height = date_height + len(rows) * row_height + padding * 2
-
-    box_x = PAGE_WIDTH / 2 + 5 * mm
-    box_width = PAGE_WIDTH - MARGIN_RIGHT - box_x
-    box_y = separator_y - box_height - 3 * mm
-
-    pdf.setFillColor(LIGHT_GRAY)
-    pdf.roundRect(box_x, box_y, box_width, box_height, 4, fill=1, stroke=0)
-
-    pdf.setFillColor(ORANGE)
-    pdf.rect(box_x, box_y, 3.5, box_height, fill=1, stroke=0)
-
-    inner_x = box_x + 8
-    label_width = 23 * mm
-    value_x = inner_x + label_width
-
-    date_y = box_y + box_height - padding - date_height / 2 - 1
-    pdf.setFont("Helvetica-Bold", 7.5)
-    pdf.setFillColor(TEXT_GRAY)
-    pdf.drawString(inner_x, date_y, UI_STRINGS['date'])
-
-    pdf.setFont("Helvetica", 7.5)
-    pdf.setFillColor(DARK_GRAY)
-    pdf.drawString(value_x, date_y, document.issue_date.strftime("%d/%m/%Y"))
-
-    divider_y = box_y + box_height - padding - date_height
-    pdf.setStrokeColor(MID_GRAY)
-    pdf.setLineWidth(0.4)
-    pdf.line(inner_x, divider_y, box_x + box_width - 4, divider_y)
-
-    value_max_w = box_x + box_width - value_x - 4
-    for idx, (label, value) in enumerate(rows):
-        row_y = divider_y - (idx + 0.7) * row_height
-        pdf.setFont("Helvetica-Bold", 7.5)
-        pdf.setFillColor(TEXT_GRAY)
-        pdf.drawString(inner_x, row_y, label)
-        pdf.setFont("Helvetica", 7.5)
-        pdf.setFillColor(DARK_GRAY)
-        pdf.drawString(value_x, row_y, _fit_text(pdf, value, "Helvetica", 7.5, value_max_w))
-
-    return box_y
+    pdf.setFillColor(MUTED)
+    for line in lines:
+        y -= 10.5
+        pdf.drawString(x, y, _fit(pdf, line, fonts.regular, BODY_SIZE, column_width))
+    return y
 
 
-def _draw_items_table(
+def _draw_table(
     pdf: canvas.Canvas,
     document: QuoteDocument,
-    table_top: float,
-) -> dict:
-    has_description = any(item.description for item in document.items)
+    rows: list[_Row],
+    top: float,
+) -> float:
+    y = _draw_table_header(pdf, top)
 
-    if has_description:
-        column_widths = [130, 38, 130, 82, 65, 53]
-        alignments = ["L", "C", "L", "R", "C", "R"]
-        headers = [
-            UI_STRINGS['table_item'],
-            UI_STRINGS['table_qty'],
-            UI_STRINGS['table_desc'],
-            UI_STRINGS['table_unit_price'],
-            UI_STRINGS['table_discount'],
-            UI_STRINGS['table_total'],
-        ]
-    else:
-        column_widths = [220, 45, 100, 73, 60]
-        alignments = ["L", "C", "R", "C", "R"]
-        headers = [
-            UI_STRINGS['table_item'],
-            UI_STRINGS['table_qty'],
-            UI_STRINGS['table_unit_price'],
-            UI_STRINGS['table_discount'],
-            UI_STRINGS['table_total'],
-        ]
+    for index, row in enumerate(rows):
+        remaining = len(rows) - index
+        # The closing blocks only have to fit under the last row, so reserve
+        # their height only while this is the row that would end the table.
+        floor = BOTTOM + (CLOSING_HEIGHT if remaining == 1 else 0)
+        if y - ROW_HEIGHT < floor:
+            pdf.showPage()
+            y = _draw_table_header(pdf, _draw_continuation_header(pdf, document))
+        y = _draw_row(pdf, row, y)
 
-    table_x = MARGIN_LEFT
-    table_width = sum(column_widths)
-    row_height = 9 * mm
+    return y - 20
 
+
+def _draw_table_header(pdf: canvas.Canvas, top: float) -> float:
+    columns = (
+        (UI_STRINGS["table_item"], COL_DETAIL, "L"),
+        (UI_STRINGS["table_qty"], COL_QTY, "C"),
+        (UI_STRINGS["table_unit_net"], COL_UNIT_NET, "R"),
+        (UI_STRINGS["table_unit_gross"], COL_UNIT_GROSS, "R"),
+        (UI_STRINGS["table_discount"], COL_DISCOUNT, "C"),
+        (UI_STRINGS["table_line_net"], COL_LINE_NET, "R"),
+    )
+    x = MARGIN
+    for text, width, align in columns:
+        _label(pdf, text, _anchor(x, width, align), top, align=align)
+        x += width
+
+    rule_y = top - TABLE_HEADER_HEIGHT + 9
+    pdf.setStrokeColor(INK)
+    pdf.setLineWidth(1.1)
+    pdf.line(MARGIN, rule_y, CONTENT_RIGHT, rule_y)
+    return rule_y
+
+
+def _draw_continuation_header(pdf: canvas.Canvas, document: QuoteDocument) -> float:
+    fonts = brand_fonts()
+    pdf.setFont(fonts.bold, BODY_SIZE)
     pdf.setFillColor(ABAS_BLUE)
-    pdf.rect(table_x, table_top - row_height, table_width, row_height, fill=1, stroke=0)
-    pdf.setFont("Helvetica-Bold", 7.5)
-    pdf.setFillColor(WHITE)
-    current_x = table_x
-    for label, alignment, width in zip(headers, alignments, column_widths):
-        _draw_aligned_text(pdf, label, alignment, current_x, table_top - row_height + 3 * mm, width)
-        current_x += width
-
-    header_bottom = table_top - row_height
-    last_row_y = header_bottom
-
-    for idx, item in enumerate(document.items):
-        row_y = header_bottom - (idx + 1) * row_height
-        last_row_y = row_y
-
-        bg_color = LIGHT_GRAY if idx % 2 == 0 else WHITE
-        pdf.setFillColor(bg_color)
-        pdf.rect(table_x, row_y, table_width, row_height, fill=1, stroke=0)
-        pdf.setStrokeColor(MID_GRAY)
-        pdf.setLineWidth(0.5)
-        pdf.rect(table_x, row_y, table_width, row_height, fill=0, stroke=1)
-
-        pricing = calculate_pricing(item.quantity, item.unit_price_with_tax, item.discount_percent)
-        discount_display = "—" if item.discount_percent == 0.0 else f"{item.discount_percent * 100:g}%"
-        if has_description:
-            row_values = [
-                ITEM_NAMES.get(item.name, item.name),
-                str(item.quantity),
-                item.description,
-                format_clp_int(round(item.unit_price_with_tax / 1.19)),
-                discount_display,
-                format_clp_int(pricing.subtotal),
-            ]
-        else:
-            row_values = [
-                ITEM_NAMES.get(item.name, item.name),
-                str(item.quantity),
-                format_clp_int(round(item.unit_price_with_tax / 1.19)),
-                discount_display,
-                format_clp_int(pricing.subtotal),
-            ]
-
-        pdf.setFont("Helvetica", 8)
-        pdf.setFillColor(DARK_GRAY)
-        current_x = table_x
-        for value, alignment, width in zip(row_values, alignments, column_widths):
-            _draw_aligned_text(pdf, value, alignment, current_x, row_y + 3 * mm, width)
-            current_x += width
-
-    pdf.setStrokeColor(colors.HexColor("#BBBBBB"))
-    pdf.setLineWidth(0.3)
-    separator_x = table_x
-    for width in column_widths[:-1]:
-        separator_x += width
-        pdf.line(separator_x, table_top, separator_x, last_row_y)
-
-    return {
-        "table_x": table_x,
-        "table_width": table_width,
-        "data_y": last_row_y,
-        "column_widths": column_widths,
-    }
+    pdf.drawString(MARGIN, TOP - 10, UI_STRINGS["continued"].format(number=document.quote_number))
+    return TOP - 34
 
 
-def _draw_totals(pdf: canvas.Canvas, pricing: PricingSummary, table_context: dict) -> float:
-    table_x = table_context["table_x"]
-    table_width = table_context["table_width"]
-    data_y = table_context["data_y"]
-    column_widths = table_context["column_widths"]
+def _draw_row(pdf: canvas.Canvas, row: _Row, top: float) -> float:
+    fonts = brand_fonts()
+    baseline = top - 15
 
-    totals_width = column_widths[-2] + column_widths[-1]
-    totals_x = table_x + table_width - totals_width
-    totals_right = table_x + table_width
+    pdf.setFont(fonts.bold, ROW_SIZE)
+    pdf.setFillColor(INK)
+    pdf.drawString(MARGIN, baseline, _fit(pdf, row.name, fonts.bold, ROW_SIZE, COL_DETAIL - 12))
 
-    row_height = 8 * mm
-    top_y = data_y - 2 * mm
+    if row.description:
+        pdf.setFont(fonts.regular, SMALL_SIZE)
+        pdf.setFillColor(MUTED)
+        pdf.drawString(
+            MARGIN, baseline - 10,
+            _fit(pdf, row.description, fonts.regular, SMALL_SIZE, COL_DETAIL - 12),
+        )
 
-    rows = [
-        (UI_STRINGS['subtotal'], format_clp_int(pricing.subtotal), False),
-        (UI_STRINGS['tax'], format_clp_int(pricing.tax), False),
-        (UI_STRINGS['total'], format_clp_int(pricing.total), True),
-    ]
+    cells = (
+        (str(row.quantity), COL_QTY, "C", fonts.regular, ROW_SIZE, TEXT_GRAY),
+        (row.unit_net, COL_UNIT_NET, "R", fonts.bold, ROW_SIZE, INK),
+        (row.unit_gross, COL_UNIT_GROSS, "R", fonts.regular, 9.0, MUTED),
+        (row.discount, COL_DISCOUNT, "C", fonts.bold, 8.25, ORANGE),
+        (row.line_net, COL_LINE_NET, "R", fonts.bold, ROW_SIZE, INK),
+    )
+    x = MARGIN + COL_DETAIL
+    for text, width, align, font, size, color in cells:
+        pdf.setFont(font, size)
+        pdf.setFillColor(color)
+        _aligned(pdf, text, _anchor(x, width, align), baseline, align)
+        x += width
 
-    for idx, (label, value, highlight) in enumerate(rows):
-        y = top_y - idx * row_height
-        rect_y = y - row_height + 2
-        if highlight:
-            pdf.setFillColor(ORANGE)
-            pdf.rect(totals_x, rect_y, totals_width, row_height - 2, fill=1, stroke=0)
-            pdf.setFont("Helvetica-Bold", 9)
-            pdf.setFillColor(WHITE)
-        else:
-            pdf.setFillColor(LIGHT_GRAY)
-            pdf.rect(totals_x, rect_y, totals_width, row_height - 2, fill=1, stroke=0)
-            pdf.setStrokeColor(MID_GRAY)
-            pdf.setLineWidth(0.4)
-            pdf.rect(totals_x, rect_y, totals_width, row_height - 2, fill=0, stroke=1)
-            pdf.setFont("Helvetica-Bold", 8.5)
-            pdf.setFillColor(TEXT_GRAY)
-
-        pdf.drawString(totals_x + 5, rect_y + 2.5 * mm, label)
-        pdf.setFillColor(WHITE if highlight else DARK_GRAY)
-        pdf.setFont("Helvetica-Bold" if highlight else "Helvetica", 9 if highlight else 8.5)
-        pdf.drawRightString(totals_right - 4, rect_y + 2.5 * mm, f"$ {value}")
-
-    return top_y - len(rows) * row_height
+    bottom = top - ROW_HEIGHT
+    pdf.setStrokeColor(LINE_SOFT)
+    pdf.setLineWidth(0.6)
+    pdf.line(MARGIN, bottom, CONTENT_RIGHT, bottom)
+    return bottom
 
 
-def _draw_validity_note(pdf: canvas.Canvas, validity_days: int, totals_bottom: float) -> None:
-    pdf.setFont("Helvetica-Oblique", 7.5)
-    pdf.setFillColor(colors.HexColor("#999999"))
-    pdf.drawString(
-        MARGIN_LEFT,
-        totals_bottom - 8 * mm,
-        UI_STRINGS['validity_note'].format(days=validity_days),
+def _draw_totals(pdf: canvas.Canvas, totals: PricingSummary, top: float) -> float:
+    fonts = brand_fonts()
+    block_width = 211.5
+    left = CONTENT_RIGHT - block_width
+    y = top
+
+    for label, value in (
+        (UI_STRINGS["subtotal"], totals.subtotal),
+        (UI_STRINGS["tax"], totals.tax),
+    ):
+        pdf.setFont(fonts.regular, BODY_SIZE)
+        pdf.setFillColor(MUTED)
+        pdf.drawString(left, y, label)
+        pdf.setFont(fonts.regular, ROW_SIZE)
+        pdf.setFillColor(TEXT_GRAY)
+        pdf.drawRightString(CONTENT_RIGHT, y, f"$ {format_clp_int(value)}")
+        y -= 15
+
+    rule_y = y + 5
+    pdf.setStrokeColor(LINE)
+    pdf.setLineWidth(0.6)
+    pdf.line(left, rule_y, CONTENT_RIGHT, rule_y)
+
+    # Clear of the rule: at 20.25pt the digits rise ~14.5pt above the baseline,
+    # so a smaller drop lets a seven-figure total cross the line above it.
+    y -= 20
+    _label(pdf, UI_STRINGS["total"], left, y + 4, color=INK)
+    pdf.setFont(fonts.bold, 20.25)
+    pdf.setFillColor(ORANGE)
+    pdf.drawRightString(CONTENT_RIGHT, y, f"$ {format_clp_int(totals.total)}")
+
+    return y - 30
+
+
+def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> None:
+    """Terms, transfer details and the signature line.
+
+    These flow directly under the totals rather than being pinned to the foot:
+    on a one-line quote, pinning them opens a hole in the middle of the page,
+    which reads as a mistake. The clamp keeps them off the footer when the page
+    is full.
+    """
+    fonts = brand_fonts()
+    top = max(top, BOTTOM + FOOTER_ZONE + CLOSING_BLOCK)
+
+    pdf.setStrokeColor(LINE)
+    pdf.setLineWidth(0.6)
+    pdf.line(MARGIN, top, CONTENT_RIGHT, top)
+
+    column_width = (CONTENT_WIDTH - 2 * 22.5) / 3
+    columns = (
+        (UI_STRINGS["payment_terms"],
+         [line.format(days=document.validity_days) for line in PAYMENT_TERMS]),
+        (UI_STRINGS["transfer_details"], list(TRANSFER_DETAILS)),
     )
 
+    x = MARGIN
+    for label, lines in columns:
+        _label(pdf, label, x, top - 17)
+        y = top - 30
+        pdf.setFont(fonts.regular, SMALL_SIZE)
+        pdf.setFillColor(TEXT_GRAY)
+        for line in lines:
+            pdf.drawString(x, y, _fit(pdf, line, fonts.regular, SMALL_SIZE, column_width))
+            y -= 10.5
+        x += column_width + 22.5
 
-def _draw_footer(pdf: canvas.Canvas) -> None:
-    footer_height = 18 * mm
-    pdf.setFillColor(DARK_GRAY)
-    pdf.rect(0, 0, PAGE_WIDTH, footer_height, fill=1, stroke=0)
-    pdf.setFillColor(ORANGE)
-    pdf.rect(0, footer_height, PAGE_WIDTH, 2.5, fill=1, stroke=0)
+    _label(pdf, UI_STRINGS["signature"], x, top - 17)
+    signature_y = top - 62
+    pdf.setStrokeColor(INK)
+    pdf.setLineWidth(0.6)
+    pdf.line(x, signature_y, x + column_width, signature_y)
+    pdf.setFont(fonts.regular, 7.1)
+    pdf.setFillColor(MUTED)
+    pdf.drawString(x, signature_y - 10, UI_STRINGS["signature_caption"])
 
-    pdf.setFont("Helvetica-Bold", 8.5)
-    pdf.setFillColor(WHITE)
-    pdf.drawCentredString(PAGE_WIDTH / 2, footer_height - 6 * mm, UI_STRINGS['footer_msg'])
+    pdf.setFont(fonts.regular, SMALL_SIZE)
+    pdf.setFillColor(MUTED)
+    pdf.drawString(
+        MARGIN, BOTTOM + 18,
+        UI_STRINGS["validity_note"].format(days=document.validity_days),
+    )
+
+    pdf.setFont(fonts.regular, 7.5)
+    pdf.setFillColor(MUTED)
+    pdf.drawString(MARGIN, BOTTOM, UI_STRINGS["footer_msg"])
+    pdf.drawRightString(CONTENT_RIGHT, BOTTOM, UI_STRINGS["footer_legal"])
 
 
-def _fit_text(pdf: canvas.Canvas, text: str, font_name: str, font_size: float, max_width: float) -> str:
+def _label(
+    pdf: canvas.Canvas,
+    text: str,
+    x: float,
+    y: float,
+    align: str = "L",
+    color: Color = MUTED,
+) -> None:
+    """Small uppercase tracked label — the eyebrow used throughout the layout.
+
+    Letter spacing only exists on a text object, and text objects have no
+    aligned draw, so the start point is computed from the tracked width.
+    """
+    fonts = brand_fonts()
+    text = text.upper()
+    width = pdf.stringWidth(text, fonts.bold, LABEL_SIZE) + LABEL_TRACKING * max(len(text) - 1, 0)
+
+    if align == "R":
+        start = x - width
+    elif align == "C":
+        start = x - width / 2
+    else:
+        start = x
+
+    label = pdf.beginText(start, y)
+    label.setFont(fonts.bold, LABEL_SIZE)
+    label.setFillColor(color)
+    label.setCharSpace(LABEL_TRACKING)
+    label.textOut(text)
+    pdf.drawText(label)
+
+
+def _anchor(x: float, width: float, align: str) -> float:
+    if align == "R":
+        return x + width
+    if align == "C":
+        return x + width / 2
+    return x
+
+
+def _aligned(pdf: canvas.Canvas, text: str, x: float, y: float, align: str) -> None:
+    if align == "R":
+        pdf.drawRightString(x, y, text)
+    elif align == "C":
+        pdf.drawCentredString(x, y, text)
+    else:
+        pdf.drawString(x, y, text)
+
+
+def _format_date(value) -> str:
+    months = (
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    )
+    return f"{value.day} de {months[value.month - 1]} de {value.year}"
+
+
+def _wrap(
+    pdf: canvas.Canvas,
+    text: str,
+    font_name: str,
+    font_size: float,
+    max_width: float,
+    max_lines: int = 2,
+) -> list[str]:
+    """Break text on word boundaries, eliding only once the line budget is spent."""
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if current and pdf.stringWidth(candidate, font_name, font_size) > max_width:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    lines.append(current)
+
+    if len(lines) <= max_lines:
+        return lines
+    kept = lines[: max_lines - 1]
+    kept.append(_fit(pdf, " ".join(lines[max_lines - 1:]), font_name, font_size, max_width))
+    return kept
+
+
+def _fit(pdf: canvas.Canvas, text: str, font_name: str, font_size: float, max_width: float) -> str:
     if pdf.stringWidth(text, font_name, font_size) <= max_width:
         return text
     while text and pdf.stringWidth(text + "…", font_name, font_size) > max_width:
         text = text[:-1]
     return text + "…"
-
-
-def _draw_aligned_text(
-    pdf: canvas.Canvas,
-    text: str,
-    alignment: str,
-    x: float,
-    y: float,
-    width: float,
-) -> None:
-    if alignment == "R":
-        pdf.drawRightString(x + width - 4, y, text)
-    elif alignment == "C":
-        pdf.drawCentredString(x + width / 2, y, text)
-    else:
-        pdf.drawString(x + 4, y, text)
