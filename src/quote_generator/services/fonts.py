@@ -14,15 +14,23 @@ FONT_DIR = Path(__file__).resolve().parents[3] / "assets" / "fonts"
 # rounded terminals, open apertures. Shipped under the OFL (see OFL.txt).
 _FACES = (
     ("NunitoSans", "NunitoSans-Regular.ttf", "Helvetica"),
+    ("NunitoSans-SemiBold", "NunitoSans-SemiBold.ttf", "Helvetica-Bold"),
     ("NunitoSans-Bold", "NunitoSans-Bold.ttf", "Helvetica-Bold"),
+    ("NunitoSans-ExtraBold", "NunitoSans-ExtraBold.ttf", "Helvetica-Bold"),
     ("NunitoSans-Light", "NunitoSans-Light.ttf", "Helvetica"),
 )
 
 
 @dataclass(frozen=True)
 class Fonts:
+    """The five weights the design uses. Collapsing 600 and 800 onto Bold made
+    item names too heavy and the total too light, which read as the wrong
+    typeface rather than the wrong weight."""
+
     regular: str
+    semibold: str
     bold: str
+    extrabold: str
     light: str
 
     @property

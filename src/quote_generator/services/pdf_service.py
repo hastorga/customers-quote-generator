@@ -37,16 +37,50 @@ COL_LINE_NET = 79.5
 # The design lets a row grow with its content, so a line carrying a description
 # is taller than one that is only a name. A single fixed height cramped the
 # description against the row rule below it.
-ROW_HEIGHT = 32.0
-ROW_HEIGHT_WITH_DESCRIPTION = 43.0
-TABLE_HEADER_HEIGHT = 16.0
+ROW_HEIGHT = 36.55
+ROW_HEIGHT_WITH_DESCRIPTION = 49.54
+ROW_NAME_BASELINE = 21.11
+ROW_DESCRIPTION_BASELINE = 34.76
+TABLE_LABEL_BASELINE = 6.45
+TABLE_HEADER_HEIGHT = 16.57
 
 # Terms, transfer details, the signature line and the footer, measured from the
 # block's top rule. The footer belongs to this group rather than being pinned to
 # the page foot, where it read as orphaned under a short quote.
-CLOSING_BLOCK = 104.0
-# What the last row must leave free below it: the totals and that whole block.
-CLOSING_HEIGHT = 215.0
+CLOSING_LABEL_BASELINE = 23.70
+CLOSING_TEXT_BASELINE = 39.34
+CLOSING_TEXT_STEP = 12.60
+CLOSING_SIGNATURE_RULE = 55.20
+CLOSING_CAPTION_BASELINE = 68.40
+CLOSING_FOOTER_BASELINE = 102.50
+CLOSING_BLOCK = 123.14
+
+# Gap between major blocks (34px in the design).
+SECTION_GAP = 25.5
+
+# Header, right-hand column.
+HEADER_LABEL_BASELINE = 6.45
+HEADER_NUMBER_BASELINE = 43.05
+HEADER_DATE_BASELINE = 63.09
+HEADER_RULE = 91.50
+
+# Issuer and client block, measured from the block top. The step from the tax id
+# to the first address line is wider than the step between address lines: the
+# design separates them as two groups, and collapsing both to one spacing was
+# the most visible of the rhythm errors.
+PARTY_NAME_BASELINE = 21.11
+PARTY_TAX_ID_BASELINE = 35.89
+PARTY_FIRST_LINE_BASELINE = 56.91
+PARTY_LINE_STEP = 14.29
+PARTY_DESCENT = 3.68
+
+# Totals block.
+TOTALS_WIDTH = 211.5
+TOTALS_NET_BASELINE = 9.86
+TOTALS_TAX_BASELINE = 29.91
+TOTALS_RULE = 42.35
+TOTALS_TOTAL_BASELINE = 73.32
+TOTALS_HEIGHT = 80.47
 
 # The logo is sized by height and its width follows the file's own aspect
 # ratio, so swapping the asset cannot silently stretch it. The width cap keeps
@@ -54,11 +88,23 @@ CLOSING_HEIGHT = 215.0
 LOGO_HEIGHT = 46.5
 LOGO_MAX_WIDTH = 190.0
 
-LABEL_SIZE = 6.4
-LABEL_TRACKING = 0.7
-BODY_SIZE = 8.25
-ROW_SIZE = 9.75
-SMALL_SIZE = 7.9
+# Type sizes, all the design's px values scaled by 72/96.
+LABEL_SIZE = 6.375          # 8.5px
+LABEL_TRACKING = 0.7        # 0.11em
+QUOTE_NUMBER_SIZE = 39.0    # 52px
+QUOTE_NUMBER_TRACKING = -0.78   # -0.02em
+BODY_SIZE = 8.25            # 11px
+NAME_SIZE = 9.75            # 13px
+ROW_SIZE = 9.75             # 13px
+GROSS_SIZE = 9.0            # 12px
+DISCOUNT_SIZE = 8.25        # 11px
+SMALL_SIZE = 7.875          # 10.5px
+TOTALS_LABEL_SIZE = 8.625   # 11.5px
+TOTAL_LABEL_SIZE = 7.5      # 10px
+TOTAL_LABEL_TRACKING = 0.9  # 0.12em
+TOTAL_VALUE_SIZE = 20.25    # 27px
+CAPTION_SIZE = 7.125        # 9.5px
+FOOTER_SIZE = 7.5           # 10px
 
 
 @dataclass(frozen=True)
@@ -83,6 +129,14 @@ def render_quote_pdf(document: QuoteDocument, totals: PricingSummary) -> None:
     y = _draw_header(pdf, document)
     y = _draw_parties(pdf, document, y)
     y = _draw_table(pdf, document, rows, y)
+
+    # Rows fill the page, and it is the closing group that moves when it no
+    # longer fits. Reserving its height under the last row instead pushed a
+    # single row onto the next page and left most of this one blank.
+    if y - TOTALS_HEIGHT - SECTION_GAP - CLOSING_BLOCK < BOTTOM:
+        pdf.showPage()
+        y = _draw_continuation_header(pdf, document)
+
     y = _draw_totals(pdf, totals, y)
     _draw_closing(pdf, document, y)
 
@@ -118,22 +172,25 @@ def _draw_header(pdf: canvas.Canvas, document: QuoteDocument) -> float:
         mask="auto",
     )
 
-    _label(pdf, UI_STRINGS["quote_title"], CONTENT_RIGHT, logo_top - 6, align="R")
+    _label(pdf, UI_STRINGS["quote_title"], CONTENT_RIGHT, logo_top - HEADER_LABEL_BASELINE, align="R")
 
-    pdf.setFont(fonts.light, 39)
-    pdf.setFillColor(ABAS_BLUE)
-    pdf.drawRightString(CONTENT_RIGHT, logo_top - 43, document.quote_number)
+    _tracked(
+        pdf, document.quote_number, CONTENT_RIGHT, logo_top - HEADER_NUMBER_BASELINE,
+        fonts.light, QUOTE_NUMBER_SIZE, ABAS_BLUE, QUOTE_NUMBER_TRACKING, align="R",
+    )
 
     pdf.setFont(fonts.regular, BODY_SIZE)
     pdf.setFillColor(TEXT_GRAY)
-    pdf.drawRightString(CONTENT_RIGHT, logo_top - 56, _format_date(document.issue_date))
+    pdf.drawRightString(
+        CONTENT_RIGHT, logo_top - HEADER_DATE_BASELINE, _format_date(document.issue_date)
+    )
 
-    rule_y = logo_top - 72
+    rule_y = logo_top - HEADER_RULE
     pdf.setStrokeColor(ABAS_BLUE)
     pdf.setLineWidth(1.5)
     pdf.line(MARGIN, rule_y, CONTENT_RIGHT, rule_y)
 
-    return rule_y - 26
+    return rule_y - SECTION_GAP
 
 
 def _logo_size(path: str) -> tuple[float, float]:
@@ -170,7 +227,7 @@ def _draw_parties(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> fl
         pdf, right_x, top, UI_STRINGS["to"], client.company_name,
         client.tax_id, client_lines, ORANGE,
     )
-    return min(left_bottom, right_bottom) - 26
+    return min(left_bottom, right_bottom) - SECTION_GAP
 
 
 def _party_block(
@@ -189,24 +246,28 @@ def _party_block(
 
     # A legal name wraps rather than truncating: cutting a company's registered
     # name short on a commercial document is not an acceptable failure mode.
-    y = top - 15
-    pdf.setFont(fonts.bold, 9.75)
+    y = top - PARTY_NAME_BASELINE
+    pdf.setFont(fonts.bold, NAME_SIZE)
     pdf.setFillColor(INK)
-    for index, line in enumerate(_wrap(pdf, name, fonts.bold, 9.75, column_width)):
+    wrapped = _wrap(pdf, name, fonts.bold, NAME_SIZE, column_width)
+    for index, line in enumerate(wrapped):
         if index:
-            y -= 11
+            y -= PARTY_LINE_STEP
         pdf.drawString(x, y, line)
 
-    y -= 11
+    extra = (len(wrapped) - 1) * PARTY_LINE_STEP
+    y = top - PARTY_TAX_ID_BASELINE - extra
     pdf.setFont(fonts.regular, BODY_SIZE)
     pdf.setFillColor(TEXT_GRAY)
     pdf.drawString(x, y, f"{UI_STRINGS['tax_id']} {tax_id}")
 
     pdf.setFillColor(MUTED)
-    for line in lines:
-        y -= 10.5
-        pdf.drawString(x, y, _fit(pdf, line, fonts.regular, BODY_SIZE, column_width))
-    return y
+    y = top - PARTY_FIRST_LINE_BASELINE - extra
+    for index, line in enumerate(lines):
+        pdf.drawString(x, y - index * PARTY_LINE_STEP, _fit(pdf, line, fonts.regular, BODY_SIZE, column_width))
+    if lines:
+        y -= (len(lines) - 1) * PARTY_LINE_STEP
+    return y - PARTY_DESCENT
 
 
 def _draw_table(
@@ -217,17 +278,13 @@ def _draw_table(
 ) -> float:
     y = _draw_table_header(pdf, top)
 
-    for index, row in enumerate(rows):
-        remaining = len(rows) - index
-        # The closing blocks only have to fit under the last row, so reserve
-        # their height only while this is the row that would end the table.
-        floor = BOTTOM + (CLOSING_HEIGHT if remaining == 1 else 0)
-        if y - _row_height(row) < floor:
+    for row in rows:
+        if y - _row_height(row) < BOTTOM:
             pdf.showPage()
             y = _draw_table_header(pdf, _draw_continuation_header(pdf, document))
         y = _draw_row(pdf, row, y)
 
-    return y - 25.5
+    return y - SECTION_GAP
 
 
 def _draw_table_header(pdf: canvas.Canvas, top: float) -> float:
@@ -241,10 +298,10 @@ def _draw_table_header(pdf: canvas.Canvas, top: float) -> float:
     )
     x = MARGIN
     for text, width, align in columns:
-        _label(pdf, text, _anchor(x, width, align), top, align=align)
+        _label(pdf, text, _anchor(x, width, align), top - TABLE_LABEL_BASELINE, align=align)
         x += width
 
-    rule_y = top - TABLE_HEADER_HEIGHT + 9
+    rule_y = top - TABLE_HEADER_HEIGHT
     pdf.setStrokeColor(INK)
     pdf.setLineWidth(1.1)
     pdf.line(MARGIN, rule_y, CONTENT_RIGHT, rule_y)
@@ -265,25 +322,25 @@ def _row_height(row: _Row) -> float:
 
 def _draw_row(pdf: canvas.Canvas, row: _Row, top: float) -> float:
     fonts = brand_fonts()
-    baseline = top - 18.5
+    baseline = top - ROW_NAME_BASELINE
 
-    pdf.setFont(fonts.bold, ROW_SIZE)
+    pdf.setFont(fonts.semibold, ROW_SIZE)
     pdf.setFillColor(INK)
-    pdf.drawString(MARGIN, baseline, _fit(pdf, row.name, fonts.bold, ROW_SIZE, COL_DETAIL - 12))
+    pdf.drawString(MARGIN, baseline, _fit(pdf, row.name, fonts.semibold, ROW_SIZE, COL_DETAIL - 12))
 
     if row.description:
         pdf.setFont(fonts.regular, SMALL_SIZE)
         pdf.setFillColor(MUTED)
         pdf.drawString(
-            MARGIN, baseline - 10.5,
+            MARGIN, top - ROW_DESCRIPTION_BASELINE,
             _fit(pdf, row.description, fonts.regular, SMALL_SIZE, COL_DETAIL - 12),
         )
 
     cells = (
         (str(row.quantity), COL_QTY, "C", fonts.regular, ROW_SIZE, TEXT_GRAY),
-        (row.unit_net, COL_UNIT_NET, "R", fonts.bold, ROW_SIZE, INK),
-        (row.unit_gross, COL_UNIT_GROSS, "R", fonts.regular, 9.0, MUTED),
-        (row.discount, COL_DISCOUNT, "C", fonts.bold, 8.25, ORANGE),
+        (row.unit_net, COL_UNIT_NET, "R", fonts.semibold, ROW_SIZE, INK),
+        (row.unit_gross, COL_UNIT_GROSS, "R", fonts.regular, GROSS_SIZE, MUTED),
+        (row.discount, COL_DISCOUNT, "C", fonts.bold, DISCOUNT_SIZE, ORANGE),
         (row.line_net, COL_LINE_NET, "R", fonts.bold, ROW_SIZE, INK),
     )
     x = MARGIN + COL_DETAIL
@@ -302,36 +359,35 @@ def _draw_row(pdf: canvas.Canvas, row: _Row, top: float) -> float:
 
 def _draw_totals(pdf: canvas.Canvas, totals: PricingSummary, top: float) -> float:
     fonts = brand_fonts()
-    block_width = 211.5
-    left = CONTENT_RIGHT - block_width
-    y = top
+    left = CONTENT_RIGHT - TOTALS_WIDTH
 
-    for label, value in (
-        (UI_STRINGS["subtotal"], totals.subtotal),
-        (UI_STRINGS["tax"], totals.tax),
+    for offset, label, value in (
+        (TOTALS_NET_BASELINE, UI_STRINGS["subtotal"], totals.subtotal),
+        (TOTALS_TAX_BASELINE, UI_STRINGS["tax"], totals.tax),
     ):
-        pdf.setFont(fonts.regular, BODY_SIZE)
+        y = top - offset
+        pdf.setFont(fonts.regular, TOTALS_LABEL_SIZE)
         pdf.setFillColor(MUTED)
         pdf.drawString(left, y, label)
         pdf.setFont(fonts.regular, ROW_SIZE)
         pdf.setFillColor(TEXT_GRAY)
         pdf.drawRightString(CONTENT_RIGHT, y, f"$ {format_clp_int(value)}")
-        y -= 15
 
-    rule_y = y + 5
+    rule_y = top - TOTALS_RULE
     pdf.setStrokeColor(LINE)
     pdf.setLineWidth(0.6)
     pdf.line(left, rule_y, CONTENT_RIGHT, rule_y)
 
-    # Clear of the rule: at 20.25pt the digits rise ~14.5pt above the baseline,
-    # so a smaller drop lets a seven-figure total cross the line above it.
-    y -= 20
-    _label(pdf, UI_STRINGS["total"], left, y + 4, color=INK)
-    pdf.setFont(fonts.bold, 20.25)
+    total_y = top - TOTALS_TOTAL_BASELINE
+    _tracked(
+        pdf, UI_STRINGS["total"], left, total_y, fonts.extrabold,
+        TOTAL_LABEL_SIZE, INK, TOTAL_LABEL_TRACKING,
+    )
+    pdf.setFont(fonts.extrabold, TOTAL_VALUE_SIZE)
     pdf.setFillColor(ORANGE)
-    pdf.drawRightString(CONTENT_RIGHT, y, f"$ {format_clp_int(totals.total)}")
+    pdf.drawRightString(CONTENT_RIGHT, total_y, f"$ {format_clp_int(totals.total)}")
 
-    return y - 30
+    return top - TOTALS_HEIGHT - SECTION_GAP
 
 
 def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> None:
@@ -358,28 +414,29 @@ def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> No
 
     x = MARGIN
     for label, lines in columns:
-        _label(pdf, label, x, top - 17)
-        y = top - 30
+        _label(pdf, label, x, top - CLOSING_LABEL_BASELINE)
         pdf.setFont(fonts.regular, SMALL_SIZE)
         pdf.setFillColor(TEXT_GRAY)
-        for line in lines:
-            pdf.drawString(x, y, _fit(pdf, line, fonts.regular, SMALL_SIZE, column_width))
-            y -= 10.5
+        for index, line in enumerate(lines):
+            pdf.drawString(
+                x, top - CLOSING_TEXT_BASELINE - index * CLOSING_TEXT_STEP,
+                _fit(pdf, line, fonts.regular, SMALL_SIZE, column_width),
+            )
         x += column_width + 22.5
 
-    _label(pdf, UI_STRINGS["signature"], x, top - 17)
-    signature_y = top - 62
+    _label(pdf, UI_STRINGS["signature"], x, top - CLOSING_LABEL_BASELINE)
+    signature_y = top - CLOSING_SIGNATURE_RULE
     pdf.setStrokeColor(INK)
     pdf.setLineWidth(0.6)
     pdf.line(x, signature_y, x + column_width, signature_y)
-    pdf.setFont(fonts.regular, 7.1)
+    pdf.setFont(fonts.regular, CAPTION_SIZE)
     pdf.setFillColor(MUTED)
-    pdf.drawString(x, signature_y - 10, UI_STRINGS["signature_caption"])
+    pdf.drawString(x, top - CLOSING_CAPTION_BASELINE, UI_STRINGS["signature_caption"])
 
     # The validity window is already stated in the commercial terms column, so
     # the separate note the old template printed would only repeat it.
-    footer_y = top - 94
-    pdf.setFont(fonts.regular, 7.5)
+    footer_y = top - CLOSING_FOOTER_BASELINE
+    pdf.setFont(fonts.regular, FOOTER_SIZE)
     pdf.setFillColor(MUTED)
     pdf.drawString(MARGIN, footer_y, UI_STRINGS["footer_msg"])
     pdf.drawRightString(CONTENT_RIGHT, footer_y, UI_STRINGS["footer_legal"])
@@ -393,14 +450,28 @@ def _label(
     align: str = "L",
     color: Color = MUTED,
 ) -> None:
-    """Small uppercase tracked label — the eyebrow used throughout the layout.
+    """Small uppercase tracked label — the eyebrow used throughout the layout."""
+    _tracked(
+        pdf, text.upper(), x, y, brand_fonts().bold, LABEL_SIZE, color,
+        LABEL_TRACKING, align=align,
+    )
 
-    Letter spacing only exists on a text object, and text objects have no
-    aligned draw, so the start point is computed from the tracked width.
-    """
-    fonts = brand_fonts()
-    text = text.upper()
-    width = pdf.stringWidth(text, fonts.bold, LABEL_SIZE) + LABEL_TRACKING * max(len(text) - 1, 0)
+
+def _tracked(
+    pdf: canvas.Canvas,
+    text: str,
+    x: float,
+    y: float,
+    font_name: str,
+    font_size: float,
+    color: Color,
+    tracking: float,
+    align: str = "L",
+) -> None:
+    """Draw letter-spaced text. Spacing only exists on a text object, and text
+    objects have no aligned draw, so the start point is computed from the
+    tracked width."""
+    width = pdf.stringWidth(text, font_name, font_size) + tracking * max(len(text) - 1, 0)
 
     if align == "R":
         start = x - width
@@ -409,12 +480,15 @@ def _label(
     else:
         start = x
 
-    label = pdf.beginText(start, y)
-    label.setFont(fonts.bold, LABEL_SIZE)
-    label.setFillColor(color)
-    label.setCharSpace(LABEL_TRACKING)
-    label.textOut(text)
-    pdf.drawText(label)
+    obj = pdf.beginText(start, y)
+    obj.setFont(font_name, font_size)
+    obj.setFillColor(color)
+    obj.setCharSpace(tracking)
+    obj.textOut(text)
+    # Tc is graphics state, not text-object state: it survives ET and would
+    # apply to every later drawString on the page. Reset it inside this object.
+    obj.setCharSpace(0)
+    pdf.drawText(obj)
 
 
 def _anchor(x: float, width: float, align: str) -> float:
