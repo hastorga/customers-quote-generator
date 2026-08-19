@@ -66,7 +66,7 @@ def run() -> None:
         issuer=DEFAULT_ISSUER,
         client=client_info,
         items=[quote_item],
-        logo_path="assets/abastible-lockup.png",
+        logo_path="assets/abastible-logo-positivo.png",
         output_path=output_path,
         validity_days=VALIDITY_DAYS,
     )

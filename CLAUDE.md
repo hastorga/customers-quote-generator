@@ -56,4 +56,4 @@ src/quote_generator/
 
 **Commercial blocks**: `COMMERCIAL_TERMS` and `TRANSFER_DETAILS` in `constants.py` print under the totals. Transfer details come from the `QUOTE_TRANSFER_DETAILS` environment variable — this repository is public, so the real bank details must never be committed; without it the quote prints visible `[BANCO]`-style placeholders.
 
-**Assets**: The official lockup lives at `assets/abastible-lockup.png` (cropped from `extended-iso-logo.jpg`, so it carries its own blue field). Output PDFs are written to `outputs/` (auto-created).
+**Assets**: The quote header uses `assets/abastible-logo-positivo.png` — the mark in positive on white, which is what the Editorial direction was designed around. The current official lockups in `assets/` are all set on a blue field; dropping one into this layout puts a solid blue block on a page built to be airy, so it was rejected deliberately. Replace this file if the brand manual yields a positive version of the current lockup: `_logo_size()` reads the aspect ratio from the file, so no code changes are needed. Output PDFs are written to `outputs/` (auto-created).

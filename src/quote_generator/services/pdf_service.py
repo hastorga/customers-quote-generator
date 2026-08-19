@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from reportlab.lib.colors import Color
 from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
 from quote_generator.core.constants import (
@@ -33,15 +34,25 @@ COL_UNIT_GROSS = 67.5
 COL_DISCOUNT = 34.5
 COL_LINE_NET = 79.5
 
-ROW_HEIGHT = 33.0
+# The design lets a row grow with its content, so a line carrying a description
+# is taller than one that is only a name. A single fixed height cramped the
+# description against the row rule below it.
+ROW_HEIGHT = 32.0
+ROW_HEIGHT_WITH_DESCRIPTION = 43.0
 TABLE_HEADER_HEIGHT = 16.0
 
-# The validity note and footer line always sit at the very bottom of the page.
-FOOTER_ZONE = 40.0
-# Terms, transfer details and the signature line, measured from their top rule.
-CLOSING_BLOCK = 110.0
-# What the last row must leave free below it: totals, closing block and footer.
-CLOSING_HEIGHT = 236.0
+# Terms, transfer details, the signature line and the footer, measured from the
+# block's top rule. The footer belongs to this group rather than being pinned to
+# the page foot, where it read as orphaned under a short quote.
+CLOSING_BLOCK = 104.0
+# What the last row must leave free below it: the totals and that whole block.
+CLOSING_HEIGHT = 215.0
+
+# The logo is sized by height and its width follows the file's own aspect
+# ratio, so swapping the asset cannot silently stretch it. The width cap keeps
+# an unexpectedly wide file from running into the quote number.
+LOGO_HEIGHT = 46.5
+LOGO_MAX_WIDTH = 190.0
 
 LABEL_SIZE = 6.4
 LABEL_TRACKING = 0.7
@@ -93,9 +104,8 @@ def _price_row(item) -> _Row:
 
 def _draw_header(pdf: canvas.Canvas, document: QuoteDocument) -> float:
     fonts = brand_fonts()
-    logo_width = 150.0
-    logo_height = logo_width / 3.70  # the lockup's aspect ratio
     logo_top = TOP
+    logo_width, logo_height = _logo_size(document.logo_path)
 
     pdf.drawImage(
         document.logo_path,
@@ -124,6 +134,18 @@ def _draw_header(pdf: canvas.Canvas, document: QuoteDocument) -> float:
     pdf.line(MARGIN, rule_y, CONTENT_RIGHT, rule_y)
 
     return rule_y - 26
+
+
+def _logo_size(path: str) -> tuple[float, float]:
+    """Logo box at LOGO_HEIGHT, keeping the file's aspect ratio and the width cap."""
+    width_px, height_px = ImageReader(path).getSize()
+    ratio = width_px / height_px
+    height = LOGO_HEIGHT
+    width = height * ratio
+    if width > LOGO_MAX_WIDTH:
+        width = LOGO_MAX_WIDTH
+        height = width / ratio
+    return width, height
 
 
 def _draw_parties(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> float:
@@ -200,12 +222,12 @@ def _draw_table(
         # The closing blocks only have to fit under the last row, so reserve
         # their height only while this is the row that would end the table.
         floor = BOTTOM + (CLOSING_HEIGHT if remaining == 1 else 0)
-        if y - ROW_HEIGHT < floor:
+        if y - _row_height(row) < floor:
             pdf.showPage()
             y = _draw_table_header(pdf, _draw_continuation_header(pdf, document))
         y = _draw_row(pdf, row, y)
 
-    return y - 20
+    return y - 25.5
 
 
 def _draw_table_header(pdf: canvas.Canvas, top: float) -> float:
@@ -237,9 +259,13 @@ def _draw_continuation_header(pdf: canvas.Canvas, document: QuoteDocument) -> fl
     return TOP - 34
 
 
+def _row_height(row: _Row) -> float:
+    return ROW_HEIGHT_WITH_DESCRIPTION if row.description else ROW_HEIGHT
+
+
 def _draw_row(pdf: canvas.Canvas, row: _Row, top: float) -> float:
     fonts = brand_fonts()
-    baseline = top - 15
+    baseline = top - 18.5
 
     pdf.setFont(fonts.bold, ROW_SIZE)
     pdf.setFillColor(INK)
@@ -249,7 +275,7 @@ def _draw_row(pdf: canvas.Canvas, row: _Row, top: float) -> float:
         pdf.setFont(fonts.regular, SMALL_SIZE)
         pdf.setFillColor(MUTED)
         pdf.drawString(
-            MARGIN, baseline - 10,
+            MARGIN, baseline - 10.5,
             _fit(pdf, row.description, fonts.regular, SMALL_SIZE, COL_DETAIL - 12),
         )
 
@@ -267,7 +293,7 @@ def _draw_row(pdf: canvas.Canvas, row: _Row, top: float) -> float:
         _aligned(pdf, text, _anchor(x, width, align), baseline, align)
         x += width
 
-    bottom = top - ROW_HEIGHT
+    bottom = top - _row_height(row)
     pdf.setStrokeColor(LINE_SOFT)
     pdf.setLineWidth(0.6)
     pdf.line(MARGIN, bottom, CONTENT_RIGHT, bottom)
@@ -317,7 +343,7 @@ def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> No
     is full.
     """
     fonts = brand_fonts()
-    top = max(top, BOTTOM + FOOTER_ZONE + CLOSING_BLOCK)
+    top = max(top, BOTTOM + CLOSING_BLOCK)
 
     pdf.setStrokeColor(LINE)
     pdf.setLineWidth(0.6)
@@ -350,17 +376,13 @@ def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> No
     pdf.setFillColor(MUTED)
     pdf.drawString(x, signature_y - 10, UI_STRINGS["signature_caption"])
 
-    pdf.setFont(fonts.regular, SMALL_SIZE)
-    pdf.setFillColor(MUTED)
-    pdf.drawString(
-        MARGIN, BOTTOM + 18,
-        UI_STRINGS["validity_note"].format(days=document.validity_days),
-    )
-
+    # The validity window is already stated in the commercial terms column, so
+    # the separate note the old template printed would only repeat it.
+    footer_y = top - 94
     pdf.setFont(fonts.regular, 7.5)
     pdf.setFillColor(MUTED)
-    pdf.drawString(MARGIN, BOTTOM, UI_STRINGS["footer_msg"])
-    pdf.drawRightString(CONTENT_RIGHT, BOTTOM, UI_STRINGS["footer_legal"])
+    pdf.drawString(MARGIN, footer_y, UI_STRINGS["footer_msg"])
+    pdf.drawRightString(CONTENT_RIGHT, footer_y, UI_STRINGS["footer_legal"])
 
 
 def _label(

@@ -112,7 +112,6 @@ UI_STRINGS = {
     "transfer_details": "Datos de transferencia",
     "signature": "Acepta y firma",
     "signature_caption": "Nombre, RUT y fecha",
-    "validity_note": "Esta cotización es válida por hasta {days} días calendario desde la fecha de emisión.",
     "footer_msg": "Gracias por su solicitud.",
     "footer_legal": "Abastible S.A. · Consignación Llay Llay · abastible.cl",
 }
