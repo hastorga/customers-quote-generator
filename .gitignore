@@ -8,3 +8,4 @@ __pycache__/
 !api/requirements.txt
 /outputs/*
 .vercel
+.DS_Store
