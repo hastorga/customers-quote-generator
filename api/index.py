@@ -26,7 +26,7 @@ from quote_generator.supabase_client import (
 )
 from quote_generator.utils.pricing import PricingSummary, calculate_pricing
 
-LOGO_PATH = str(Path(__file__).parent.parent / "assets" / "abastible-lockup.png")
+LOGO_PATH = str(Path(__file__).parent.parent / "assets" / "abastible-logo-positivo.png")
 ALLOWED_ORIGINS = {
     "https://abastible-llayllay.vercel.app",
     "https://abastible-sales-vue-hastorgas-projects.vercel.app",
