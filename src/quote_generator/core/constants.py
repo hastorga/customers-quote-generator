@@ -48,9 +48,8 @@ DEFAULT_ISSUER = IssuerInfo(
 VALIDITY_DAYS = 10
 TAX_RATE = 0.19
 
-# Commercial blocks printed under the totals. The bracketed entries are
-# placeholders — fill them in with the real terms before sending quotes out.
-PAYMENT_TERMS: tuple[str, ...] = (
+# Commercial blocks printed under the totals.
+COMMERCIAL_TERMS: tuple[str, ...] = (
     "Precios en CLP con descuento aplicado.",
     "Validez: {days} días calendario.",
 )
@@ -95,7 +94,7 @@ UI_STRINGS = {
     "subtotal": "Neto",
     "tax": "IVA 19%",
     "total": "TOTAL",
-    "payment_terms": "Condiciones de pago",
+    "commercial_terms": "Condiciones comerciales",
     "transfer_details": "Datos de transferencia",
     "signature": "Acepta y firma",
     "signature_caption": "Nombre, RUT y fecha",

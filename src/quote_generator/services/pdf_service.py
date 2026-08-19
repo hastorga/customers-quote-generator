@@ -7,7 +7,7 @@ from reportlab.lib.pagesizes import LETTER
 from reportlab.pdfgen import canvas
 
 from quote_generator.core.constants import (
-    ABAS_BLUE, INK, LINE, LINE_SOFT, MUTED, ORANGE, PAYMENT_TERMS,
+    ABAS_BLUE, COMMERCIAL_TERMS, INK, LINE, LINE_SOFT, MUTED, ORANGE,
     TRANSFER_DETAILS, TEXT_GRAY, UI_STRINGS, ITEM_NAMES,
 )
 from quote_generator.core.models import QuoteDocument
@@ -325,8 +325,8 @@ def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> No
 
     column_width = (CONTENT_WIDTH - 2 * 22.5) / 3
     columns = (
-        (UI_STRINGS["payment_terms"],
-         [line.format(days=document.validity_days) for line in PAYMENT_TERMS]),
+        (UI_STRINGS["commercial_terms"],
+         [line.format(days=document.validity_days) for line in COMMERCIAL_TERMS]),
         (UI_STRINGS["transfer_details"], list(TRANSFER_DETAILS)),
     )
 

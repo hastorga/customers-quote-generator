@@ -54,6 +54,6 @@ src/quote_generator/
 
 **Typography**: Nunito Sans (OFL) ships in `assets/fonts/`. `brand_fonts()` registers the faces once per process and falls back to Helvetica if a file is missing, so a bad deploy degrades instead of failing. Keep `!assets/fonts/OFL.txt` in `.gitignore` — the blanket `*.txt` rule would otherwise drop the license.
 
-**Commercial blocks**: `PAYMENT_TERMS` and `TRANSFER_DETAILS` in `constants.py` print under the totals and still carry bracketed placeholders (`[BANCO]`, `[N° DE CUENTA]`). Fill them in before sending quotes to customers.
+**Commercial blocks**: `COMMERCIAL_TERMS` and `TRANSFER_DETAILS` in `constants.py` print under the totals. Transfer details come from the `QUOTE_TRANSFER_DETAILS` environment variable — this repository is public, so the real bank details must never be committed; without it the quote prints visible `[BANCO]`-style placeholders.
 
 **Assets**: The official lockup lives at `assets/abastible-lockup.png` (cropped from `extended-iso-logo.jpg`, so it carries its own blue field). Output PDFs are written to `outputs/` (auto-created).
