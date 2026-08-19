@@ -39,9 +39,25 @@ ALLOWED_ORIGINS = {
 app = Flask(__name__)
 
 
-def _allowed_origin() -> str:
+def _cors(response: Response) -> Response:
+    """Echo the CORS headers back, but only to an origin on the allowlist.
+
+    An origin that is not allowed gets no Access-Control-Allow-Origin at all.
+    Naming some other allowed origin instead told the browser nothing it could
+    use — it blocks on the mismatch either way — and because ALLOWED_ORIGINS is
+    a set, which origin came back was not even stable between deploys.
+
+    Vary: Origin goes out regardless, so a cache never hands one origin the
+    response computed for another.
+    """
+    response.headers["Vary"] = "Origin"
+
     origin = request.headers.get("Origin", "")
-    return origin if origin in ALLOWED_ORIGINS else next(iter(ALLOWED_ORIGINS))
+    if origin in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
 
 
 @app.before_request
@@ -52,10 +68,7 @@ def _log_request() -> None:
 @app.after_request
 def _log_response(response: Response) -> Response:
     logger.info("← %s %s %s", request.method, request.path, response.status_code)
-    response.headers["Access-Control-Allow-Origin"] = _allowed_origin()
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    return response
+    return _cors(response)
 
 
 @app.errorhandler(404)
@@ -68,13 +81,6 @@ def _not_found(e: Exception) -> tuple[Response, int]:
 def _method_not_allowed(e: Exception) -> tuple[Response, int]:
     logger.warning("405 %s %s", request.method, request.path)
     return jsonify({"error": "método no permitido"}), 405
-
-
-def _cors(response: Response) -> Response:
-    response.headers["Access-Control-Allow-Origin"] = _allowed_origin()
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    return response
 
 
 def _validate_items(items: list[dict], is_prospect: bool) -> str | None:
