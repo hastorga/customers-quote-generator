@@ -5,6 +5,10 @@ description = "Generate customer quote PDFs with ReportLab"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+  # Flask serves api/index.py in production, so it is a runtime dependency:
+  # in the dev group it was dropped by `uv export --no-dev` and had to be
+  # pinned into api/requirements.txt by hand.
+  "flask>=3.1.3",
   "python-dotenv>=1.2.2",
   "reportlab>=4.4.4",
   "supabase>=2.10.0",
@@ -25,7 +29,6 @@ packages = ["src/quote_generator"]
 
 [dependency-groups]
 dev = [
-    "flask>=3.1.3",
     "mypy>=1.20.2",
     "pytest>=9.0.2",
 ]
