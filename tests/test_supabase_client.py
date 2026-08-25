@@ -137,13 +137,28 @@ class TestFetchIssuer:
         assert issuer.footer_legal == ""
 
     @pytest.mark.parametrize("field", ["office_name", "address", "phone", "email"])
-    def test_refuses_when_an_issuer_field_is_missing(self, field: str):
-        row = {**self._COMPLETE, field: None}
+    @pytest.mark.parametrize("empty", [None, "", "   "], ids=["null", "blank", "whitespace"])
+    def test_refuses_when_an_issuer_field_is_missing(self, field: str, empty):
+        """Whitespace counts as missing: " " is truthy, and a quote with a blank
+        address line is exactly the unattributable document the refusal exists for."""
+        row = {**self._COMPLETE, field: empty}
         mock_client = self._client_returning([row])
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
             with pytest.raises(ValueError, match="datos de emisor"):
                 fetch_issuer("branch-uuid")
+
+    def test_trims_surrounding_whitespace(self):
+        row = {**self._COMPLETE, "office_name": "  Oficina X  ", "footer_legal": "   "}
+        mock_client = self._client_returning([row])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            issuer = fetch_issuer("branch-uuid")
+
+        assert issuer.office_name == "Oficina X"
+        # A whitespace-only footer must reach the PDF as absent, so the composed
+        # fallback wins instead of printing a blank line.
+        assert issuer.footer_legal == ""
 
     def test_refuses_when_branch_does_not_exist(self):
         mock_client = self._client_returning([])

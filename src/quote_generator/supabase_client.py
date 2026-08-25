@@ -89,7 +89,18 @@ def fetch_issuer(branch_id: str) -> IssuerInfo:
         raise ValueError(f"La sucursal {branch_id} no existe")
     data = rows[0]
 
-    missing = [field for field in REQUIRED_ISSUER_FIELDS if not data.get(field)]
+    # Strip before judging: a field holding only spaces is missing, but " " is
+    # truthy in Python, so a bare falsiness test lets it through and the quote
+    # prints a blank line where the address belongs. The database rejects the
+    # same shape (branches_active_requires_issuer trims before testing); this
+    # side has to agree with it, and it also guards the branches that are not
+    # active yet, which the constraint deliberately does not reach.
+    values = {
+        field: str(data.get(field) or "").strip()
+        for field in (*REQUIRED_ISSUER_FIELDS, "footer_legal")
+    }
+
+    missing = [field for field in REQUIRED_ISSUER_FIELDS if not values[field]]
     if missing:
         raise ValueError(
             f"La sucursal «{data.get('name') or branch_id}» no tiene datos de emisor "
@@ -99,11 +110,11 @@ def fetch_issuer(branch_id: str) -> IssuerInfo:
     return IssuerInfo(
         company_name=COMPANY_NAME,
         tax_id=COMPANY_TAX_ID,
-        office_name=str(data["office_name"]),
-        address=str(data["address"]),
-        phone=str(data["phone"]),
-        email=str(data["email"]),
-        footer_legal=str(data.get("footer_legal") or ""),
+        office_name=values["office_name"],
+        address=values["address"],
+        phone=values["phone"],
+        email=values["email"],
+        footer_legal=values["footer_legal"],
     )
 
 
