@@ -14,13 +14,14 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from quote_generator.core.constants import DEFAULT_ISSUER, VALIDITY_DAYS
+from quote_generator.core.constants import VALIDITY_DAYS
 from quote_generator.core.models import ClientInfo, QuoteDocument, QuoteItem
 from quote_generator.services.pdf_service import render_quote_pdf
 from quote_generator.utils.customers import detect_is_company
 from quote_generator.supabase_client import (
     _get_client,
     fetch_customer,
+    fetch_issuer,
     resolve_items,
     save_quotation,
 )
@@ -148,6 +149,12 @@ def generate_quotation():
     try:
         today = date.today()
 
+        # Before anything else: an unconfigured branch must not get as far as a
+        # quote number, which nextval_for_quote would burn on a document that is
+        # never issued. fetch_issuer raises ValueError, which the handler below
+        # turns into a 400 the operator can act on.
+        issuer = fetch_issuer(branch_id)
+
         if is_prospect:
             client_info = ClientInfo(
                 company_name=prospect_name,  # type: ignore[arg-type]
@@ -204,7 +211,7 @@ def generate_quotation():
         document = QuoteDocument(
             quote_number=str(quote_number).zfill(3),
             issue_date=today,
-            issuer=DEFAULT_ISSUER,
+            issuer=issuer,
             client=client_info,
             items=quote_items,
             logo_path=LOGO_PATH,

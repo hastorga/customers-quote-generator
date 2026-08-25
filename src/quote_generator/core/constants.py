@@ -12,8 +12,6 @@ except ModuleNotFoundError:  # pragma: no cover
         return None
 
 
-from quote_generator.core.models import IssuerInfo
-
 # Makes a local .env work the way the deployed environment already does, where
 # Vercel injects these directly. Existing environment variables win.
 load_dotenv()
@@ -48,15 +46,14 @@ MUTED = colors.HexColor("#9AA0B4")
 LINE = colors.HexColor("#DDE1EC")
 LINE_SOFT = colors.HexColor("#EDEFF5")
 
-# Issuer Information (from Abastible S.A.)
-DEFAULT_ISSUER = IssuerInfo(
-    company_name="ABASTIBLE S.A.",
-    tax_id="91.806.000-6",
-    office_name="Consignación Abastible Llay Llay",
-    address="Balmaceda 473, Llay Llay, Valparaíso",
-    phone="34 2611498 - 34 2612637 | +56 9 3006 7765",
-    email="hector.astorga_externos@abastible.cl",
-)
+# The only issuer facts that hold from any branch: the company behind every
+# consignment office. The office's own name, address, phone and email are
+# per-branch and live on the `branches` row (see fetch_issuer); there is
+# deliberately no default for them. A constant here would be one branch's
+# letterhead printed on another branch's quote — a document that looks entirely
+# correct in a customer's hands and sends the reply to the wrong inbox.
+COMPANY_NAME = "ABASTIBLE S.A."
+COMPANY_TAX_ID = "91.806.000-6"
 
 # PDF Layout Defaults
 VALIDITY_DAYS = 10
@@ -113,5 +110,9 @@ UI_STRINGS = {
     "signature": "Acepta y firma",
     "signature_caption": "Nombre, RUT y fecha",
     "footer_msg": "Gracias por su solicitud.",
-    "footer_legal": "Abastible S.A. · Consignación Llay Llay · abastible.cl",
+    # Fallback when the branch has no footer_legal of its own. The stored value
+    # wins verbatim when there is one; this keeps the line attributable either way.
+    # Title case here, not COMPANY_NAME: the footer is set small and the all-caps
+    # form the header uses reads as shouting at that size.
+    "footer_legal": "Abastible S.A. · {office_name} · abastible.cl",
 }

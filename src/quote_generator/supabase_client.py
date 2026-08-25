@@ -7,6 +7,9 @@ from typing import Any, cast
 
 from supabase import Client, create_client
 
+from quote_generator.core.constants import COMPANY_NAME, COMPANY_TAX_ID
+from quote_generator.core.models import IssuerInfo
+
 
 def _get_client() -> Client:
     url = os.environ["SUPABASE_URL"]
@@ -51,6 +54,57 @@ def fetch_customer(customer_id: str) -> CustomerData:
     )
     d = cast(dict[str, Any], row.data)
     return CustomerData(name=str(d["name"]), rut=str(d["rut"]))
+
+
+# The office identity a quote must print. Every one of these is required: a
+# quote missing its address or its reply-to email is unattributable, and that is
+# worse than a quote that was not produced.
+REQUIRED_ISSUER_FIELDS = ("office_name", "address", "phone", "email")
+
+
+def fetch_issuer(branch_id: str) -> IssuerInfo:
+    """Build the issuer letterhead from the branch that is issuing the quote.
+
+    Refuses rather than falls back. A fallback here would print one branch's
+    name, address and email on another branch's quote — a document that renders
+    perfectly, reaches the customer, and routes their reply to the wrong office.
+    Nothing about it looks wrong, so nobody catches it.
+
+    The database will not let an active branch be missing these (see the
+    ``branches_active_requires_issuer`` check), so reaching the refusal below
+    means the branch is still being onboarded.
+    """
+    client = _get_client()
+    row = (
+        client.table("branches")
+        .select("name, office_name, address, phone, email, footer_legal")
+        .eq("id", branch_id)
+        .limit(1)
+        .execute()
+    )
+    # limit(1) rather than single(): a missing branch has to come back as an
+    # empty list to be turned into the message below, not as a PostgREST error.
+    rows = cast(list[dict[str, Any]], row.data or [])
+    if not rows:
+        raise ValueError(f"La sucursal {branch_id} no existe")
+    data = rows[0]
+
+    missing = [field for field in REQUIRED_ISSUER_FIELDS if not data.get(field)]
+    if missing:
+        raise ValueError(
+            f"La sucursal «{data.get('name') or branch_id}» no tiene datos de emisor "
+            f"configurados ({', '.join(missing)}); no se puede emitir la cotización"
+        )
+
+    return IssuerInfo(
+        company_name=COMPANY_NAME,
+        tax_id=COMPANY_TAX_ID,
+        office_name=str(data["office_name"]),
+        address=str(data["address"]),
+        phone=str(data["phone"]),
+        email=str(data["email"]),
+        footer_legal=str(data.get("footer_legal") or ""),
+    )
 
 
 def fetch_cylinder(cylinder_id: int) -> CylinderData:

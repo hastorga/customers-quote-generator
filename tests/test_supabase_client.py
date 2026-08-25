@@ -5,12 +5,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from quote_generator.core.constants import COMPANY_NAME, COMPANY_TAX_ID
 from quote_generator.supabase_client import (
     CustomerData,
     CylinderData,
     ResolvedItem,
     fetch_customer,
     fetch_cylinder,
+    fetch_issuer,
     resolve_items,
     save_quotation,
 )
@@ -71,6 +73,84 @@ class TestFetchCustomer:
         mock_client.table.assert_called_once_with("customers")
         chain.select.assert_called_once_with("name, rut")
         chain.eq.assert_called_once_with("id", "my-uuid")
+
+
+# ---------------------------------------------------------------------------
+# fetch_issuer
+# ---------------------------------------------------------------------------
+
+class TestFetchIssuer:
+    _COMPLETE = {
+        "name": "Llay Llay",
+        "office_name": "Consignación Abastible Llay Llay",
+        "address": "Balmaceda 473, Llay Llay, Valparaíso",
+        "phone": "34 2611498",
+        "email": "contacto@abastible.cl",
+        "footer_legal": "Abastible S.A. · Consignación Llay Llay · abastible.cl",
+    }
+
+    def _client_returning(self, rows: list) -> MagicMock:
+        mock_client = MagicMock()
+        mock_client.table.return_value = _mock_chain(_make_response(rows))
+        return mock_client
+
+    def test_maps_branch_row_to_issuer(self):
+        mock_client = self._client_returning([self._COMPLETE])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            issuer = fetch_issuer("branch-uuid")
+
+        assert issuer.office_name == "Consignación Abastible Llay Llay"
+        assert issuer.address == "Balmaceda 473, Llay Llay, Valparaíso"
+        assert issuer.phone == "34 2611498"
+        assert issuer.email == "contacto@abastible.cl"
+        assert issuer.footer_legal == "Abastible S.A. · Consignación Llay Llay · abastible.cl"
+
+    def test_company_identity_stays_constant(self):
+        """company_name and tax_id are Abastible S.A.'s, not the branch's."""
+        mock_client = self._client_returning([self._COMPLETE])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            issuer = fetch_issuer("branch-uuid")
+
+        assert issuer.company_name == COMPANY_NAME
+        assert issuer.tax_id == COMPANY_TAX_ID
+
+    def test_queries_the_requested_branch(self):
+        mock_client = MagicMock()
+        chain = _mock_chain(_make_response([self._COMPLETE]))
+        mock_client.table.return_value = chain
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            fetch_issuer("branch-uuid")
+
+        mock_client.table.assert_called_once_with("branches")
+        chain.eq.assert_called_once_with("id", "branch-uuid")
+
+    def test_missing_footer_legal_is_allowed(self):
+        row = {**self._COMPLETE, "footer_legal": None}
+        mock_client = self._client_returning([row])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            issuer = fetch_issuer("branch-uuid")
+
+        assert issuer.footer_legal == ""
+
+    @pytest.mark.parametrize("field", ["office_name", "address", "phone", "email"])
+    def test_refuses_when_an_issuer_field_is_missing(self, field: str):
+        row = {**self._COMPLETE, field: None}
+        mock_client = self._client_returning([row])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            with pytest.raises(ValueError, match="datos de emisor"):
+                fetch_issuer("branch-uuid")
+
+    def test_refuses_when_branch_does_not_exist(self):
+        mock_client = self._client_returning([])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            with pytest.raises(ValueError, match="no existe"):
+                fetch_issuer("branch-uuid")
 
 
 # ---------------------------------------------------------------------------

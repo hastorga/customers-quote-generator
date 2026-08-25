@@ -25,7 +25,7 @@ This is a Python PDF quote generator for Abastible S.A. (Chilean gas distributor
 src/quote_generator/
 ├── core/
 │   ├── models.py        # Frozen dataclasses: IssuerInfo, ClientInfo, QuoteItem, QuoteDocument
-│   └── constants.py     # Brand colors, UI strings (Spanish), default issuer, VALIDITY_DAYS
+│   └── constants.py     # Brand colors, UI strings (Spanish), COMPANY_NAME/COMPANY_TAX_ID, VALIDITY_DAYS
 ├── services/
 │   ├── pdf_service.py   # ReportLab PDF rendering
 │   ├── fonts.py         # Registers the Nunito Sans faces, falls back to Helvetica
@@ -41,6 +41,8 @@ src/quote_generator/
 **Tax-inclusive pricing model**: Unit prices in the system already include 19% IVA (VAT), and the quote is anchored on that tax-included price so it agrees with SAP peso for peso — SAP is the source of truth for what the customer is charged. `calculate_pricing()` in `utils/pricing.py` applies the discount to the tax-included unit price via `resolve_discounted_price()`, which rounds to the nearest peso **with ties going down** (SAP drops the half peso). Rounding per unit before multiplying by the quantity is deliberate: carrying an unrounded price into the multiplication makes the line total drift as the quantity grows. The net subtotal is then derived from the line total and the tax is the remainder, so `subtotal + tax == total` always holds exactly.
 
 **Supabase service**: `SupabaseService` returns mock data and is not connected to a real database. It's designed to be swapped for a live implementation.
+
+**Per-branch issuer**: the letterhead ("De" block and footer) is the *issuing branch's* identity, not a constant. `fetch_issuer(branch_id)` reads `office_name`, `address`, `phone`, `email` and `footer_legal` off the `branches` row named by the request's required `branch_id`; only `COMPANY_NAME` and `COMPANY_TAX_ID` stay constants, because they are Abastible S.A.'s and hold from any branch. A branch missing any of the four required fields makes the request **fail with a 400** — never a fallback. A quote carrying another branch's name and reply-to address renders perfectly and reaches the customer looking entirely correct, so nothing catches it; not producing the document is the safer failure. `footer_legal` is optional and composes from the office name when unset. The database enforces the same rule from the other side: `branches_active_requires_issuer` (in the `abastible-sales-vue` repo) forbids activating a branch without those four fields.
 
 **All domain models are immutable** (`@dataclass(frozen=True)`). Construct new instances rather than mutating.
 

@@ -6,12 +6,24 @@ from datetime import date
 
 @dataclass(frozen=True)
 class IssuerInfo:
+    """Who is issuing the quote.
+
+    ``company_name`` and ``tax_id`` are Abastible S.A.'s and are correct from any
+    branch; everything below them is the issuing office's own identity and comes
+    from the ``branches`` row named by the request's ``branch_id``.
+
+    ``footer_legal`` is optional: an empty value makes the PDF compose the footer
+    line from the company and office names, so a branch that never had one set
+    still prints an attributable document.
+    """
+
     company_name: str
     tax_id: str
     office_name: str
     address: str
     phone: str
     email: str
+    footer_legal: str = ""
 
 
 @dataclass(frozen=True)
