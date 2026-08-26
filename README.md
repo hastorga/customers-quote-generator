@@ -66,7 +66,7 @@ api/
 src/quote_generator/
 ├── core/
 │   ├── models.py         # Frozen dataclasses: IssuerInfo, ClientInfo, QuoteItem, QuoteDocument
-│   └── constants.py      # Brand colors, Spanish UI strings, default issuer, validity days
+│   └── constants.py      # Brand colors, Spanish UI strings, company identity, validity days
 ├── services/
 │   └── pdf_service.py    # PDF layout and rendering with ReportLab
 ├── utils/

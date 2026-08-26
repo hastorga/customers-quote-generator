@@ -439,7 +439,20 @@ def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> No
     pdf.setFont(fonts.regular, FOOTER_SIZE)
     pdf.setFillColor(MUTED)
     pdf.drawString(MARGIN, footer_y, UI_STRINGS["footer_msg"])
-    pdf.drawRightString(CONTENT_RIGHT, footer_y, UI_STRINGS["footer_legal"])
+    pdf.drawRightString(CONTENT_RIGHT, footer_y, _footer_legal(document))
+
+
+def _footer_legal(document: QuoteDocument) -> str:
+    """The footer line, from the branch when it has one and composed when it does not.
+
+    footer_legal is the one issuer field a branch may leave unset — unlike the
+    address, its absence degrades gracefully, because the office name alone
+    still attributes the document.
+    """
+    issuer = document.issuer
+    if issuer.footer_legal:
+        return issuer.footer_legal
+    return UI_STRINGS["footer_legal"].format(office_name=issuer.office_name)
 
 
 def _label(
