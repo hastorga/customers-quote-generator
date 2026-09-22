@@ -31,6 +31,7 @@ ALLOWED_ORIGINS = {
     "https://abastible-llayllay.vercel.app",
     "https://abastible-sales-vue-hastorgas-projects.vercel.app",
     "https://abastible-sales-vue-git-main-hastorgas-projects.vercel.app",
+    "https://mi.abastible-llayllay.cl",
     "http://localhost:5173",
     "http://localhost:5001",
     "http://localhost:3000",
