@@ -19,7 +19,9 @@ from quote_generator.core.models import ClientInfo, QuoteDocument, QuoteItem
 from quote_generator.services.pdf_service import render_quote_pdf
 from quote_generator.utils.customers import detect_is_company
 from quote_generator.supabase_client import (
+    CallerRejected,
     _get_client,
+    authorize_caller,
     fetch_customer,
     resolve_items,
     save_quotation,
@@ -57,7 +59,7 @@ def _cors(response: Response) -> Response:
     if origin in ALLOWED_ORIGINS:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
     return response
 
 
@@ -114,6 +116,30 @@ def _validate_items(items: list[dict], is_prospect: bool) -> str | None:
     return None
 
 
+def _require_auth() -> bool:
+    """Whether a request without a user token is refused.
+
+    Off while the app is rolled out to send the token, so older clients keep
+    working; set QUOTATION_REQUIRE_AUTH=true in Vercel once they are gone.
+    A token that is sent is always verified, whatever this says.
+    """
+    return os.environ.get("QUOTATION_REQUIRE_AUTH", "").strip().lower() == "true"
+
+
+def _bearer_token() -> str | None:
+    scheme, _, token = request.headers.get("Authorization", "").partition(" ")
+    token = token.strip()
+    return token if scheme.lower() == "bearer" and token else None
+
+
+def _referenced_ids(items: list[dict]) -> tuple[list[str], list[int]]:
+    list_price_ids = sorted({
+        str(it["list_price_id"]) for it in items if str(it.get("type") or "refill") == "refill"
+    })
+    cylinder_ids = sorted({int(it["cylinder_id"]) for it in items if it.get("type") == "cylinder"})
+    return list_price_ids, cylinder_ids
+
+
 @app.route("/generate_quotation", methods=["OPTIONS"])
 def options():
     return _cors(Response())
@@ -121,6 +147,10 @@ def options():
 
 @app.route("/generate_quotation", methods=["POST"])
 def generate_quotation():
+    access_token = _bearer_token()
+    if access_token is None and _require_auth():
+        return _cors(jsonify({"error": "se requiere iniciar sesión"})), 401
+
     try:
         body = request.get_json(force=True)
         branch_id: str | None = body.get("branch_id") or None
@@ -133,7 +163,7 @@ def generate_quotation():
 
         is_prospect = customer_id is None
 
-        if not branch_id:
+        if not branch_id and access_token is None:
             return _cors(jsonify({"error": "se requiere branch_id"})), 400
         if is_prospect and not (prospect_name and prospect_rut):
             return _cors(jsonify({"error": "se requiere customer_id o (prospect_name + prospect_rut)"})), 400
@@ -145,6 +175,20 @@ def generate_quotation():
             return _cors(jsonify({"error": error})), 400
     except (KeyError, TypeError) as e:
         return _cors(jsonify({"error": str(e)})), 400
+
+    if access_token is not None:
+        # The branch comes from the caller's token, never from the body (#812).
+        list_price_ids, cylinder_ids = _referenced_ids(items)
+        try:
+            caller_branch_id = authorize_caller(access_token, customer_id, list_price_ids, cylinder_ids)
+        except CallerRejected as e:
+            logger.warning("Cotización rechazada (%s): %s", e.status, e.message)
+            return _cors(jsonify({"error": e.message})), e.status
+        if branch_id and branch_id != caller_branch_id:
+            logger.warning("branch_id del body (%s) ignorado; se usa el del token", branch_id)
+        branch_id = caller_branch_id
+    else:
+        logger.warning("Cotización sin token de usuario (QUOTATION_REQUIRE_AUTH desactivado)")
 
     try:
         today = date.today()
