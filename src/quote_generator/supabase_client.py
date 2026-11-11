@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any, cast
 
+from postgrest import SyncPostgrestClient
+from postgrest.exceptions import APIError
 from supabase import Client, create_client
 
 
@@ -12,6 +14,73 @@ def _get_client() -> Client:
     url = os.environ["SUPABASE_URL"]
     key = os.environ["SUPABASE_SERVICE_KEY"]
     return create_client(url, key)
+
+
+class CallerRejected(Exception):
+    """The caller's token was refused, or it does not reach the requested rows."""
+
+    def __init__(self, status: int, message: str) -> None:
+        super().__init__(message)
+        self.status = status
+        self.message = message
+
+
+# PostgREST codes for a missing, malformed, expired or badly signed JWT.
+_TOKEN_ERROR_CODES = {"PGRST301", "PGRST302", "PGRST303"}
+
+
+def authorize_caller(
+    access_token: str,
+    customer_id: str | None,
+    list_price_ids: list[str],
+    cylinder_ids: list[int],
+) -> str:
+    """Ask the database, as the caller, whether they may quote these rows.
+
+    The request goes out with the caller's own token (and the anon key), so
+    PostgREST verifies the signature and expiry and authorize_quotation() runs
+    as that user: it checks the role matrix and that the customer, list prices
+    and cylinders belong to the caller's branch. Returns that branch id, which
+    is the only one the service writes under.
+    """
+    url = os.environ["SUPABASE_URL"]
+    anon_key = os.environ["SUPABASE_ANON_KEY"]
+    client = SyncPostgrestClient(
+        f"{url}/rest/v1",
+        headers={
+            "apikey": anon_key,
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        result = client.rpc(
+            "authorize_quotation",
+            {
+                "p_customer_id": customer_id,
+                "p_list_price_ids": list_price_ids,
+                "p_cylinder_ids": cylinder_ids,
+            },
+        ).execute()
+    except APIError as error:
+        code = error.code or ""
+        if code in _TOKEN_ERROR_CODES or "JWT" in (error.message or ""):
+            raise CallerRejected(401, "sesión inválida o expirada") from error
+        if code == "42501":
+            raise CallerRejected(403, "sin permiso para generar cotizaciones") from error
+        if code == "P0002":
+            raise CallerRejected(404, "cliente, precio o cilindro no encontrado en la sucursal") from error
+        if code == "22P02":
+            raise CallerRejected(400, "identificador inválido") from error
+        raise
+    finally:
+        client.session.close()
+
+    branch_id = result.data
+    if not branch_id:
+        raise CallerRejected(403, "sin permiso para generar cotizaciones")
+    return str(branch_id)
 
 
 @dataclass

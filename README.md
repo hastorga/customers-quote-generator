@@ -17,7 +17,20 @@ Create a `.env` file at the project root (not committed):
 ```
 SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_SERVICE_KEY=<service_role_key>
+SUPABASE_ANON_KEY=<anon_key>
+# Refuse requests without a user token (401). Leave unset until every client sends one.
+QUOTATION_REQUIRE_AUTH=true
 ```
+
+### Caller authentication
+
+`POST /generate_quotation` expects the signed-in user's Supabase access token in
+`Authorization: Bearer <token>`. The function calls the `authorize_quotation` RPC with that
+token and the anon key, so PostgREST verifies it and the database checks that the user has
+customers access and that the customer, list prices and cylinders belong to their branch.
+The quotation is saved under the branch the RPC returns; a `branch_id` in the body is
+ignored. Refusals map to 401 (bad or missing token), 403 (role), 404 (row of another
+branch) and 400 (malformed id).
 
 ## Installation
 
@@ -95,7 +108,7 @@ pytest tests/test_pricing.py   # single file
 ## Deploying to Vercel
 
 `vercel.json` configures `api/index.py` as a Python function and bundles `src/` and `assets/`.
-The environment variables (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`) must be set in the Vercel project settings.
+The environment variables (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_ANON_KEY`, and `QUOTATION_REQUIRE_AUTH` once every client sends a token) must be set in the Vercel project settings.
 
 ```bash
 vercel deploy --prod
