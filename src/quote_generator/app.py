@@ -76,6 +76,7 @@ def run() -> None:
         logo_path="assets/abastible-logo-positivo.png",
         output_path=output_path,
         validity_days=VALIDITY_DAYS,
+        notes=(args.notes or "").strip(),
     )
     render_quote_pdf(document, pricing)
     save_quotation(

@@ -55,6 +55,12 @@ CLOSING_CAPTION_BASELINE = 68.40
 CLOSING_FOOTER_BASELINE = 102.50
 CLOSING_BLOCK = 123.14
 
+# Free-text notes under the table: a small label, then wrapped lines.
+NOTES_LABEL_BASELINE = 6.45
+NOTES_TEXT_BASELINE = 21.0
+NOTES_TEXT_STEP = 12.6
+NOTES_MAX_LINES = 8
+
 # Gap between major blocks (34px in the design).
 SECTION_GAP = 25.5
 
@@ -129,6 +135,7 @@ def render_quote_pdf(document: QuoteDocument, totals: PricingSummary) -> None:
     y = _draw_header(pdf, document)
     y = _draw_parties(pdf, document, y)
     y = _draw_table(pdf, document, rows, y)
+    y = _draw_notes(pdf, document, y)
 
     # Rows fill the page, and it is the closing group that moves when it no
     # longer fits. Reserving its height under the last row instead pushed a
@@ -285,6 +292,47 @@ def _draw_table(
         y = _draw_row(pdf, row, y)
 
     return y - SECTION_GAP
+
+
+def _note_lines(pdf: canvas.Canvas, notes: str) -> list[str]:
+    """Wrap the notes to the content width, keeping the author's line breaks.
+
+    Capped at NOTES_MAX_LINES with an ellipsis so a very long note cannot push
+    the totals off the page.
+    """
+    fonts = brand_fonts()
+    lines: list[str] = []
+    for paragraph in notes.strip().splitlines():
+        if paragraph.strip():
+            lines.extend(_wrap(pdf, paragraph, fonts.regular, BODY_SIZE, CONTENT_WIDTH, max_lines=NOTES_MAX_LINES))
+        else:
+            lines.append("")
+    if len(lines) > NOTES_MAX_LINES:
+        lines = lines[:NOTES_MAX_LINES]
+        lines[-1] = _fit(pdf, lines[-1] + " …", fonts.regular, BODY_SIZE, CONTENT_WIDTH)
+    return lines
+
+
+def _draw_notes(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> float:
+    """The optional notes block under the item table; nothing when there are none."""
+    if not document.notes.strip():
+        return top
+
+    fonts = brand_fonts()
+    lines = _note_lines(pdf, document.notes)
+    height = NOTES_TEXT_BASELINE + (len(lines) - 1) * NOTES_TEXT_STEP + PARTY_DESCENT
+
+    if top - height < BOTTOM:
+        pdf.showPage()
+        top = _draw_continuation_header(pdf, document)
+
+    _label(pdf, UI_STRINGS["notes"], MARGIN, top - NOTES_LABEL_BASELINE)
+    pdf.setFont(fonts.regular, BODY_SIZE)
+    pdf.setFillColor(TEXT_GRAY)
+    for index, line in enumerate(lines):
+        pdf.drawString(MARGIN, top - NOTES_TEXT_BASELINE - index * NOTES_TEXT_STEP, line)
+
+    return top - height - SECTION_GAP
 
 
 def _draw_table_header(pdf: canvas.Canvas, top: float) -> float:
