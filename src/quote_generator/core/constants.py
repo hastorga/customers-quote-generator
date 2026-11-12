@@ -97,6 +97,7 @@ UI_STRINGS = {
     "subtotal": "Neto",
     "tax": "IVA 19%",
     "total": "TOTAL",
+    "notes": "Notas",
     "commercial_terms": "Condiciones comerciales",
     "transfer_details": "Datos de transferencia",
     "signature": "Acepta y firma",

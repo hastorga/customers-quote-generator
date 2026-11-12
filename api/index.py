@@ -262,6 +262,7 @@ def generate_quotation():
             logo_path=LOGO_PATH,
             output_path=tmp_path,
             validity_days=VALIDITY_DAYS,
+            notes=(notes or "").strip(),
         )
         render_quote_pdf(document, totals)
         with open(tmp_path, "rb") as f:
