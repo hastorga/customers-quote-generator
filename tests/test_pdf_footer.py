@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import date
 
+from quote_generator.core.constants import TRANSFER_DETAILS_PLACEHOLDER
 from quote_generator.core.models import ClientInfo, IssuerInfo, QuoteDocument
-from quote_generator.services.pdf_service import _footer_legal
+from quote_generator.services.pdf_service import _footer_legal, _transfer_lines
 
 
-def _issuer(footer_legal: str = "") -> IssuerInfo:
+def _issuer(footer_legal: str = "", transfer_details: tuple[str, ...] = ()) -> IssuerInfo:
     return IssuerInfo(
         company_name="ABASTIBLE S.A.",
         tax_id="91.806.000-6",
@@ -15,6 +16,7 @@ def _issuer(footer_legal: str = "") -> IssuerInfo:
         phone="34 2611498",
         email="contacto@abastible.cl",
         footer_legal=footer_legal,
+        transfer_details=transfer_details,
     )
 
 
@@ -43,3 +45,13 @@ class TestFooterLegal:
         composed = _footer_legal(_document(_issuer()))
         assert "Consignación Abastible Llay Llay" in composed
         assert "{" not in composed
+
+
+class TestTransferLines:
+    def test_prints_the_issuing_branchs_own_details(self):
+        lines = ("Titular X · 1-9", "Banco Y · Cta. 123")
+        assert _transfer_lines(_document(_issuer(transfer_details=lines))) == lines
+
+    def test_prints_visible_placeholders_when_the_branch_has_none(self):
+        """Never another branch's account, and never a silently empty block."""
+        assert _transfer_lines(_document(_issuer())) == TRANSFER_DETAILS_PLACEHOLDER

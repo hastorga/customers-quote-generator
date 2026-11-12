@@ -17,6 +17,8 @@ from quote_generator.supabase_client import (
     save_quotation,
 )
 
+BRANCH_ID = "3f2c1a9e-7b4d-4e61-9a0c-5d8e2f1b6c70"
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -87,6 +89,7 @@ class TestFetchIssuer:
         "phone": "34 2611498",
         "email": "contacto@abastible.cl",
         "footer_legal": "Abastible S.A. · Consignación Llay Llay · abastible.cl",
+        "transfer_details": "Titular X · 1-9|Banco Y · Cta. 123",
     }
 
     def _client_returning(self, rows: list) -> MagicMock:
@@ -98,7 +101,7 @@ class TestFetchIssuer:
         mock_client = self._client_returning([self._COMPLETE])
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            issuer = fetch_issuer("branch-uuid")
+            issuer = fetch_issuer(BRANCH_ID)
 
         assert issuer.office_name == "Consignación Abastible Llay Llay"
         assert issuer.address == "Balmaceda 473, Llay Llay, Valparaíso"
@@ -106,12 +109,30 @@ class TestFetchIssuer:
         assert issuer.email == "contacto@abastible.cl"
         assert issuer.footer_legal == "Abastible S.A. · Consignación Llay Llay · abastible.cl"
 
+    def test_splits_transfer_details_into_printed_lines(self):
+        mock_client = self._client_returning([self._COMPLETE])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            issuer = fetch_issuer(BRANCH_ID)
+
+        assert issuer.transfer_details == ("Titular X · 1-9", "Banco Y · Cta. 123")
+
+    @pytest.mark.parametrize("empty", [None, "", "   "])
+    def test_missing_transfer_details_is_allowed(self, empty):
+        """Optional: the PDF prints placeholders instead of refusing the quote."""
+        mock_client = self._client_returning([{**self._COMPLETE, "transfer_details": empty}])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            issuer = fetch_issuer(BRANCH_ID)
+
+        assert issuer.transfer_details == ()
+
     def test_company_identity_stays_constant(self):
         """company_name and tax_id are Abastible S.A.'s, not the branch's."""
         mock_client = self._client_returning([self._COMPLETE])
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            issuer = fetch_issuer("branch-uuid")
+            issuer = fetch_issuer(BRANCH_ID)
 
         assert issuer.company_name == COMPANY_NAME
         assert issuer.tax_id == COMPANY_TAX_ID
@@ -122,17 +143,17 @@ class TestFetchIssuer:
         mock_client.table.return_value = chain
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            fetch_issuer("branch-uuid")
+            fetch_issuer(BRANCH_ID)
 
         mock_client.table.assert_called_once_with("branches")
-        chain.eq.assert_called_once_with("id", "branch-uuid")
+        chain.eq.assert_called_once_with("id", BRANCH_ID)
 
     def test_missing_footer_legal_is_allowed(self):
         row = {**self._COMPLETE, "footer_legal": None}
         mock_client = self._client_returning([row])
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            issuer = fetch_issuer("branch-uuid")
+            issuer = fetch_issuer(BRANCH_ID)
 
         assert issuer.footer_legal == ""
 
@@ -146,14 +167,14 @@ class TestFetchIssuer:
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
             with pytest.raises(ValueError, match="datos de emisor"):
-                fetch_issuer("branch-uuid")
+                fetch_issuer(BRANCH_ID)
 
     def test_trims_surrounding_whitespace(self):
         row = {**self._COMPLETE, "office_name": "  Oficina X  ", "footer_legal": "   "}
         mock_client = self._client_returning([row])
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
-            issuer = fetch_issuer("branch-uuid")
+            issuer = fetch_issuer(BRANCH_ID)
 
         assert issuer.office_name == "Oficina X"
         # A whitespace-only footer must reach the PDF as absent, so the composed
@@ -165,7 +186,18 @@ class TestFetchIssuer:
 
         with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
             with pytest.raises(ValueError, match="no existe"):
-                fetch_issuer("branch-uuid")
+                fetch_issuer(BRANCH_ID)
+
+
+    @pytest.mark.parametrize("bad_id", ["abc", "", 42, ["x"]])
+    def test_refuses_a_malformed_branch_id_without_querying(self, bad_id):
+        mock_client = self._client_returning([])
+
+        with patch("quote_generator.supabase_client._get_client", return_value=mock_client):
+            with pytest.raises(ValueError, match="identificador de sucursal"):
+                fetch_issuer(bad_id)
+
+        mock_client.table.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

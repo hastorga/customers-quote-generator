@@ -1,5 +1,3 @@
-import os
-
 from reportlab.lib import colors
 
 try:
@@ -17,21 +15,15 @@ except ModuleNotFoundError:  # pragma: no cover
 load_dotenv()
 
 
-def _lines_from_env(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
-    """Read a block of printed lines from the environment, one line per entry.
+def split_print_lines(raw: str | None) -> tuple[str, ...]:
+    """Split a stored block of printed lines into its lines.
 
     Accepts "|" as well as real newlines: a multi-line value survives poorly
-    through a dashboard field, a shell and a CLI flag, and once stored as a
-    sensitive variable it cannot be read back to check. A single line split on
-    "|" is verifiable and safe to edit anywhere.
-
-    Falls back to the bracketed placeholders rather than to nothing: an
-    unconfigured deploy should print something visibly wrong on the quote, not
-    silently drop the seller's bank details.
+    through a dashboard field or a CLI, while a single line split on "|" is
+    verifiable and safe to edit anywhere. Blank lines are dropped.
     """
-    raw = os.environ.get(name, "").replace("|", "\n")
-    lines = tuple(line.strip() for line in raw.splitlines() if line.strip())
-    return lines or default
+    text = (raw or "").replace("|", "\n")
+    return tuple(line.strip() for line in text.splitlines() if line.strip())
 
 # Brand colors, sampled from the official logo files in assets/. Do not eyeball
 # these: #011689 and #FC4F00 are the exact values the lockup is drawn in.
@@ -64,15 +56,15 @@ COMMERCIAL_TERMS: tuple[str, ...] = (
     "Precios en CLP con descuento aplicado.",
     "Validez: {days} días calendario.",
 )
-# Kept out of the source tree: this repository is public, and git history
-# outlives any later edit. Set QUOTE_TRANSFER_DETAILS in .env and in Vercel.
-TRANSFER_DETAILS: tuple[str, ...] = _lines_from_env(
-    "QUOTE_TRANSFER_DETAILS",
-    default=(
-        "[TITULAR] · [RUT]",
-        "[BANCO] · Cta. [N° DE CUENTA]",
-        "[CORREO DE CONFIRMACIÓN]",
-    ),
+# Shown when a branch has no transfer details on file. Deliberately visible on
+# the page: a quote that silently dropped the block, or borrowed another
+# branch's account, would send the customer's payment to the wrong place. The
+# real details live on the `branches` row (transfer_details) — this repository
+# is public, so they are never committed.
+TRANSFER_DETAILS_PLACEHOLDER: tuple[str, ...] = (
+    "[TITULAR] · [RUT]",
+    "[BANCO] · Cta. [N° DE CUENTA]",
+    "[CORREO DE CONFIRMACIÓN]",
 )
 
 ITEM_NAMES: dict[str, str] = {

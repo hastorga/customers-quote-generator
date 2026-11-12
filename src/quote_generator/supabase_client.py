@@ -4,10 +4,11 @@ import os
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, cast
+from uuid import UUID
 
 from supabase import Client, create_client
 
-from quote_generator.core.constants import COMPANY_NAME, COMPANY_TAX_ID
+from quote_generator.core.constants import COMPANY_NAME, COMPANY_TAX_ID, split_print_lines
 from quote_generator.core.models import IssuerInfo
 
 
@@ -74,10 +75,19 @@ def fetch_issuer(branch_id: str) -> IssuerInfo:
     ``branches_active_requires_issuer`` check), so reaching the refusal below
     means the branch is still being onboarded.
     """
+    # Validate the shape before asking the database: PostgREST rejects a
+    # non-UUID with an APIError ("invalid input syntax for type uuid"), which the
+    # handler would surface as a 500 echoing the raw database message. A
+    # malformed id is the caller's mistake and should read as a 400.
+    try:
+        UUID(str(branch_id))
+    except ValueError:
+        raise ValueError("branch_id no es un identificador de sucursal válido") from None
+
     client = _get_client()
     row = (
         client.table("branches")
-        .select("name, office_name, address, phone, email, footer_legal")
+        .select("name, office_name, address, phone, email, footer_legal, transfer_details")
         .eq("id", branch_id)
         .limit(1)
         .execute()
@@ -97,7 +107,7 @@ def fetch_issuer(branch_id: str) -> IssuerInfo:
     # active yet, which the constraint deliberately does not reach.
     values = {
         field: str(data.get(field) or "").strip()
-        for field in (*REQUIRED_ISSUER_FIELDS, "footer_legal")
+        for field in (*REQUIRED_ISSUER_FIELDS, "footer_legal", "transfer_details")
     }
 
     missing = [field for field in REQUIRED_ISSUER_FIELDS if not values[field]]
@@ -115,6 +125,7 @@ def fetch_issuer(branch_id: str) -> IssuerInfo:
         phone=values["phone"],
         email=values["email"],
         footer_legal=values["footer_legal"],
+        transfer_details=split_print_lines(values["transfer_details"]),
     )
 
 

@@ -9,7 +9,7 @@ from reportlab.pdfgen import canvas
 
 from quote_generator.core.constants import (
     ABAS_BLUE, COMMERCIAL_TERMS, INK, LINE, LINE_SOFT, MUTED, ORANGE,
-    TRANSFER_DETAILS, TEXT_GRAY, UI_STRINGS, ITEM_NAMES,
+    TRANSFER_DETAILS_PLACEHOLDER, TEXT_GRAY, UI_STRINGS, ITEM_NAMES,
 )
 from quote_generator.core.models import QuoteDocument
 from quote_generator.services.fonts import brand_fonts
@@ -409,7 +409,7 @@ def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> No
     columns = (
         (UI_STRINGS["commercial_terms"],
          [line.format(days=document.validity_days) for line in COMMERCIAL_TERMS]),
-        (UI_STRINGS["transfer_details"], list(TRANSFER_DETAILS)),
+        (UI_STRINGS["transfer_details"], list(_transfer_lines(document))),
     )
 
     x = MARGIN
@@ -440,6 +440,14 @@ def _draw_closing(pdf: canvas.Canvas, document: QuoteDocument, top: float) -> No
     pdf.setFillColor(MUTED)
     pdf.drawString(MARGIN, footer_y, UI_STRINGS["footer_msg"])
     pdf.drawRightString(CONTENT_RIGHT, footer_y, _footer_legal(document))
+
+
+def _transfer_lines(document: QuoteDocument) -> tuple[str, ...]:
+    """The issuing branch's bank details, or visible placeholders if it has none.
+
+    Never another branch's account: see ``IssuerInfo.transfer_details``.
+    """
+    return document.issuer.transfer_details or TRANSFER_DETAILS_PLACEHOLDER
 
 
 def _footer_legal(document: QuoteDocument) -> str:
