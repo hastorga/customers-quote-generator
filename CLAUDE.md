@@ -60,3 +60,13 @@ src/quote_generator/
 **Commercial blocks**: `COMMERCIAL_TERMS` in `constants.py` and the branch's transfer details print under the totals. Transfer details are per-branch: `branches.transfer_details` (one line per `|`-separated entry) is read by `fetch_issuer` into `IssuerInfo.transfer_details`. They are optional — a branch with none prints the visible `[BANCO]`-style `TRANSFER_DETAILS_PLACEHOLDER`, and is **never** given another branch's account, because a quote that routes the customer's payment to the wrong account looks entirely correct. This repository is public, so real bank details must never be committed.
 
 **Assets**: The quote header uses `assets/abastible-logo-positivo.png` — the mark in positive on white, which is what the Editorial direction was designed around. The current official lockups in `assets/` are all set on a blue field; dropping one into this layout puts a solid blue block on a page built to be airy, so it was rejected deliberately. Replace this file if the brand manual yields a positive version of the current lockup: `_logo_size()` reads the aspect ratio from the file, so no code changes are needed. Output PDFs are written to `outputs/` (auto-created).
+
+## Releases
+
+**Every merge to `main` is a release**: a version bump, a tag and a GitHub Release.
+
+1. On `dev`, before opening the `dev` → `main` PR, bump `version` in `pyproject.toml` and run `uv lock` so `uv.lock` agrees. Commit as `chore(release): bump version to X.Y.Z`. Semver, pre-1.0: a new capability or a behaviour change is a minor bump, a fix is a patch.
+2. Open the PR titled `Release X.Y.Z` and merge it.
+3. `.github/workflows/release.yml` then tags `vX.Y.Z` and publishes the Release with generated notes. If the version was not bumped, the workflow fails on purpose ("tag already exists") instead of skipping the release — fix it by bumping on `dev` and merging again.
+
+Do not create tags or releases by hand: the workflow owns them, which keeps the tag and `pyproject.toml` from drifting apart.
