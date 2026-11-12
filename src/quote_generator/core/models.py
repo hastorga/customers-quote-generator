@@ -60,3 +60,4 @@ class QuoteDocument:
     logo_path: str
     output_path: str
     validity_days: int = 10
+    notes: str = ""
