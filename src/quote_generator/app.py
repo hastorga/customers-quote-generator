@@ -4,11 +4,17 @@ import argparse
 from datetime import date
 from pathlib import Path
 
-from quote_generator.core.constants import DEFAULT_ISSUER, VALIDITY_DAYS
+from quote_generator.core.constants import VALIDITY_DAYS
 from quote_generator.core.models import ClientInfo, QuoteDocument, QuoteItem
 from quote_generator.utils.customers import detect_is_company
 from quote_generator.services.pdf_service import render_quote_pdf
-from quote_generator.supabase_client import _get_client, fetch_customer, resolve_items, save_quotation
+from quote_generator.supabase_client import (
+    _get_client,
+    fetch_customer,
+    fetch_issuer,
+    resolve_items,
+    save_quotation,
+)
 from quote_generator.utils.formatting import format_clp_int
 from quote_generator.utils.pricing import calculate_pricing
 
@@ -26,6 +32,7 @@ def run() -> None:
 
     today = date.today()
 
+    issuer = fetch_issuer(args.branch_id)
     customer = fetch_customer(args.customer_id)
     resolved = resolve_items(
         args.customer_id,
@@ -63,7 +70,7 @@ def run() -> None:
     document = QuoteDocument(
         quote_number=str(quote_number).zfill(3),
         issue_date=today,
-        issuer=DEFAULT_ISSUER,
+        issuer=issuer,
         client=client_info,
         items=[quote_item],
         logo_path="assets/abastible-logo-positivo.png",
